@@ -185,12 +185,13 @@ class GenericConstitutiveLawIntegratorPlasticity
         Matrix tangent_tensor = ZeroMatrix(6,6);
         const array_1d<double, VoigtSize> r_predictor_f = rFflux;
         const array_1d<double, VoigtSize> r_predictor_g = rGflux;
+        double aumulated_lambda = 0.0;
 
         // Backward Euler
         while (is_converged == false && iteration <= max_iter) {
             plastic_consistency_factor_increment = F * rPlasticDenominator;
             if (plastic_consistency_factor_increment < 0.0) plastic_consistency_factor_increment = 0.0; // NOTE: It could be useful, maybe
-            rLambda += plastic_consistency_factor_increment;
+            aumulated_lambda += plastic_consistency_factor_increment;
             noalias(rPlasticStrainIncrement) = plastic_consistency_factor_increment * rGflux;
             noalias(rPlasticStrain) += rPlasticStrainIncrement;
             noalias(delta_sigma) = prod(rConstitutiveMatrix, rPlasticStrainIncrement);
@@ -214,9 +215,9 @@ class GenericConstitutiveLawIntegratorPlasticity
             BoundedMatrix<double ,6,6> dG_dE = ZeroMatrix(6, 6);
             for (int i = 0; i < 6; i++) {
                 double pseudo_total_lambda = 0.0;
-                double perturbation = 1.0e-2*rStrainVector[i];
+                double perturbation = 1.0e-4*rStrainVector[i];
                 if (perturbation <= tolerance)
-                    perturbation = 1e-3;
+                    perturbation = 1e-4;
                 double uniaxial_stress = 0.0, plastic_denominator = 0.0, kappa_p = rPlasticDissipation;
                 double threshold = rThreshold;
                 Vector strain = rStrainVector;
@@ -237,7 +238,8 @@ class GenericConstitutiveLawIntegratorPlasticity
             Matrix aux = IdentityMatrix(6, 6);
             Vector aux2 = prod(rConstitutiveMatrix, rFflux) * rPlasticDenominator;
             aux -= outer_prod(rGflux, aux2);
-            aux -= rLambda*dG_dE;
+            aux -= aumulated_lambda*dG_dE;
+            //aux -= plastic_consistency_factor_increment*dG_dE;
             noalias(tangent_tensor) = prod(rConstitutiveMatrix, aux);
             // KRATOS_WATCH(tangent_tensor)
             // KRATOS_WATCH(dG_dE)
