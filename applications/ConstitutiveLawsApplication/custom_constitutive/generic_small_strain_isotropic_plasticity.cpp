@@ -121,6 +121,7 @@ void GenericSmallStrainIsotropicPlasticity<TConstLawIntegratorType>::CalculateMa
             double threshold = this->GetThreshold();
             double plastic_dissipation = this->GetPlasticDissipation();
             Vector plastic_strain = this->GetPlasticStrain();
+            double lambda = mLambda;
 
             BoundedArrayType predictive_stress_vector;
             if (r_constitutive_law_options.Is( ConstitutiveLaw::U_P_LAW)) {
@@ -160,7 +161,7 @@ void GenericSmallStrainIsotropicPlasticity<TConstLawIntegratorType>::CalculateMa
                     threshold, plastic_denominator, f_flux, g_flux,
                     plastic_dissipation, plastic_strain_increment,
                     r_constitutive_matrix, plastic_strain, rValues,
-                    characteristic_length);
+                    characteristic_length,lambda);
                 noalias(r_integrated_stress_vector) = predictive_stress_vector;
 
                 if (r_constitutive_law_options.Is(ConstitutiveLaw::COMPUTE_CONSTITUTIVE_TENSOR)) {
@@ -318,6 +319,7 @@ void GenericSmallStrainIsotropicPlasticity<TConstLawIntegratorType>::FinalizeMat
     double threshold = this->GetThreshold();
     double plastic_dissipation = this->GetPlasticDissipation();
     Vector plastic_strain = this->GetPlasticStrain();
+    double lambda = mLambda;
 
     BoundedArrayType predictive_stress_vector;
     if (r_constitutive_law_options.Is( ConstitutiveLaw::U_P_LAW)) {
@@ -349,13 +351,14 @@ void GenericSmallStrainIsotropicPlasticity<TConstLawIntegratorType>::FinalizeMat
             threshold, plastic_denominator, f_flux, g_flux,
             plastic_dissipation, plastic_strain_increment,
             r_constitutive_matrix, plastic_strain, rValues,
-            characteristic_length);
+            characteristic_length, lambda);
         BaseType::CalculateElasticMatrix( r_constitutive_matrix, rValues);
     }
 
     mPlasticDissipation = plastic_dissipation;
     mPlasticStrain = plastic_strain;
     mThreshold = threshold;
+    mLambda = lambda;
 }
 
 /***********************************************************************************/

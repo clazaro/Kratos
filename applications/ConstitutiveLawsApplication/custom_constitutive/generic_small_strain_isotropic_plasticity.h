@@ -113,7 +113,8 @@ public:
         : BaseType(rOther),
           mPlasticDissipation(rOther.mPlasticDissipation),
           mThreshold(rOther.mThreshold),
-          mPlasticStrain(rOther.mPlasticStrain)
+          mPlasticStrain(rOther.mPlasticStrain),
+          mLambda(rOther.mLambda)
     {
     }
 
@@ -429,6 +430,7 @@ protected:
     double mPlasticDissipation = 0.0;
     double mThreshold = 0.0;
     Vector mPlasticStrain = ZeroVector(VoigtSize);
+    double mLambda = 0.0;
 
     ///@}
     ///@name Private Operators
@@ -466,6 +468,7 @@ protected:
         rSerializer.save("PlasticDissipation", mPlasticDissipation);
         rSerializer.save("Threshold", mThreshold);
         rSerializer.save("PlasticStrain", mPlasticStrain);
+        rSerializer.save("Lambda", mLambda);
     }
 
     void load(Serializer &rSerializer) override
@@ -474,6 +477,7 @@ protected:
         rSerializer.load("PlasticDissipation", mPlasticDissipation);
         rSerializer.load("Threshold", mThreshold);
         rSerializer.load("PlasticStrain", mPlasticStrain);
+        rSerializer.load("Lambda", mLambda);
     }
 
     ///@}

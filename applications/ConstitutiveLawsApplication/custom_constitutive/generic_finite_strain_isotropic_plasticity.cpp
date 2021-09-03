@@ -155,12 +155,12 @@ void GenericFiniteStrainIsotropicPlasticity<TConstLawIntegratorType>::
             } else { // Plastic case
                 // While loop backward euler
                 /* Inside "IntegrateStressVector" the predictive_stress_vector is updated to verify the yield criterion */
-                TConstLawIntegratorType::IntegrateStressVector(
-                    predictive_stress_vector, r_strain_vector, uniaxial_stress,
-                    threshold, plastic_denominator, f_flux, g_flux,
-                    plastic_dissipation, plastic_strain_increment,
-                    r_constitutive_matrix, plastic_strain, rValues,
-                    characteristic_length);
+                // TConstLawIntegratorType::IntegrateStressVector(
+                //     predictive_stress_vector, r_strain_vector, uniaxial_stress,
+                //     threshold, plastic_denominator, f_flux, g_flux,
+                //     plastic_dissipation, plastic_strain_increment,
+                //     r_constitutive_matrix, plastic_strain, rValues,
+                //     characteristic_length,0);
                 noalias(r_integrated_stress_vector) = predictive_stress_vector;
 
                 if (r_constitutive_law_options.Is(ConstitutiveLaw::COMPUTE_CONSTITUTIVE_TENSOR)) {
@@ -272,12 +272,12 @@ void GenericFiniteStrainIsotropicPlasticity<TConstLawIntegratorType>::
         if (F > std::abs(1.0e-4 * r_threshold)) { // Plastic case
             // While loop backward euler
             /* Inside "IntegrateStressVector" the predictive_stress_vector is updated to verify the yield criterion */
-            TConstLawIntegratorType::IntegrateStressVector(
-                predictive_stress_vector, r_strain_vector, uniaxial_stress,
-                r_threshold, plastic_denominator, f_flux, g_flux,
-                r_plastic_dissipation, plastic_strain_increment,
-                r_constitutive_matrix, r_plastic_strain, rValues,
-                characteristic_length);
+            // TConstLawIntegratorType::IntegrateStressVector(
+            //     predictive_stress_vector, r_strain_vector, uniaxial_stress,
+            //     r_threshold, plastic_denominator, f_flux, g_flux,
+            //     r_plastic_dissipation, plastic_strain_increment,
+            //     r_constitutive_matrix, r_plastic_strain, rValues,
+            //     characteristic_length,0);
         }
     }
 }

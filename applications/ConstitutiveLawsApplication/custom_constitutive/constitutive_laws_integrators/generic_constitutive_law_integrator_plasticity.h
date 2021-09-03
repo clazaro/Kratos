@@ -169,7 +169,8 @@ class GenericConstitutiveLawIntegratorPlasticity
         Matrix& rConstitutiveMatrix,
         Vector& rPlasticStrain,
         ConstitutiveLaw::Parameters& rValues,
-        const double CharacteristicLength
+        const double CharacteristicLength,
+        double& rLambda
         )
     {
         // Material properties
@@ -182,11 +183,14 @@ class GenericConstitutiveLawIntegratorPlasticity
         double plastic_consistency_factor_increment;
         double F = rUniaxialStress - rThreshold;
         Matrix tangent_tensor = ZeroMatrix(6,6);
+        const array_1d<double, VoigtSize> r_predictor_f = rFflux;
+        const array_1d<double, VoigtSize> r_predictor_g = rGflux;
 
         // Backward Euler
         while (is_converged == false && iteration <= max_iter) {
             plastic_consistency_factor_increment = F * rPlasticDenominator;
             if (plastic_consistency_factor_increment < 0.0) plastic_consistency_factor_increment = 0.0; // NOTE: It could be useful, maybe
+            rLambda += plastic_consistency_factor_increment;
             noalias(rPlasticStrainIncrement) = plastic_consistency_factor_increment * rGflux;
             noalias(rPlasticStrain) += rPlasticStrainIncrement;
             noalias(delta_sigma) = prod(rConstitutiveMatrix, rPlasticStrainIncrement);
@@ -203,9 +207,45 @@ class GenericConstitutiveLawIntegratorPlasticity
                 iteration++;
             }
         }
-        CalculateTangentMatrix(tangent_tensor, rConstitutiveMatrix, rFflux, rGflux, rPlasticDenominator);
-        noalias(rConstitutiveMatrix) = tangent_tensor;
-        KRATOS_WARNING_IF("GenericConstitutiveLawIntegratorPlasticity", iteration > max_iter) << "Maximum number of iterations in plasticity loop reached..." << std::endl;
+        // CalculateTangentMatrix(tangent_tensor, rConstitutiveMatrix, rFflux, rGflux, rPlasticDenominator);
+        //--------------------------------------------------------------------------------------------
+        // OJO CON CALCULAR LAS DERIVADAS... REVISAR
+        //--------------------------------------------------------------------------------------------
+            BoundedMatrix<double ,6,6> dG_dE = ZeroMatrix(6, 6);
+            for (int i = 0; i < 6; i++) {
+                double pseudo_total_lambda = 0.0;
+                double perturbation = 1.0e-2*rStrainVector[i];
+                if (perturbation <= tolerance)
+                    perturbation = 1e-3;
+                double uniaxial_stress = 0.0, plastic_denominator = 0.0, kappa_p = rPlasticDissipation;
+                double threshold = rThreshold;
+                Vector strain = rStrainVector;
+                strain[i] += perturbation;
+                array_1d<double, VoigtSize> stress = prod(rConstitutiveMatrix,strain-rPlasticStrain);
+                array_1d<double, VoigtSize> f_flux = rFflux;
+                array_1d<double, VoigtSize> g_flux = rGflux;
+                array_1d<double, VoigtSize> plastic_strain_increment = ZeroVector(6);
+                array_1d<double, VoigtSize> plastic_strain = rPlasticStrain;
+
+                double pseudo_F = CalculatePlasticParameters(stress, strain, uniaxial_stress, threshold,
+                                                plastic_denominator, f_flux, g_flux, kappa_p, plastic_strain_increment,
+                                                rConstitutiveMatrix, rValues, CharacteristicLength, plastic_strain);
+
+                for (IndexType row = 0;row < VoigtSize; ++row)
+                    dG_dE(row, i) = (g_flux(row) - rGflux(row)) / (perturbation);
+            }
+            Matrix aux = IdentityMatrix(6, 6);
+            Vector aux2 = prod(rConstitutiveMatrix, rFflux) * rPlasticDenominator;
+            aux -= outer_prod(rGflux, aux2);
+            aux -= rLambda*dG_dE;
+            noalias(tangent_tensor) = prod(rConstitutiveMatrix, aux);
+            // KRATOS_WATCH(tangent_tensor)
+            // KRATOS_WATCH(dG_dE)
+            // KRATOS_ERROR << "" << std::endl;
+            //--------------------------------------------------------------------------------------------
+            //--------------------------------------------------------------------------------------------
+            noalias(rConstitutiveMatrix) = tangent_tensor;
+            KRATOS_WARNING_IF("GenericConstitutiveLawIntegratorPlasticity", iteration > max_iter) << "Maximum number of iterations in plasticity loop reached..." << std::endl;
     }
 
     /**
