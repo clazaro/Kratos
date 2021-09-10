@@ -127,8 +127,8 @@ class ConvectionDiffusionStationaryShiftedBoundarySolver(convection_diffusion_st
         # Element checks
         if num_nodes_elements not in (3,4):
             raise Exception("Only simplex elements are supported so far.")
-        if element_name != "LaplacianShiftedBoundaryElement":
-            raise Exception("Only \'LaplacianShiftedBoundaryElement\' is supported so far.")
+        if element_name != "LaplacianShiftedBoundaryElement" and element_name != "LaplacianShiftedBoundarySplitElement":
+            raise Exception("Only \'LaplacianShiftedBoundaryElement\' and \'LaplacianShiftedBoundarySplitElement\' are supported so far.")
 
         # Set registering element name
         name_string = "{0}{1}D{2}N".format(element_name, domain_size, num_nodes_elements)

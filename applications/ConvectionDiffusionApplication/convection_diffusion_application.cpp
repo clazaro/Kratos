@@ -46,6 +46,8 @@ KratosConvectionDiffusionApplication::KratosConvectionDiffusionApplication()
       mLaplacian3D27N(0, Element::GeometryType::Pointer(new Hexahedra3D27<Node<3> >(Element::GeometryType::PointsArrayType(27)))),
       mLaplacianShiftedBoundary2D3N(0, Element::GeometryType::Pointer(new Triangle2D3<Node<3> >(Element::GeometryType::PointsArrayType(3)))),
       mLaplacianShiftedBoundary3D4N(0, Element::GeometryType::Pointer(new Tetrahedra3D4<Node<3> >(Element::GeometryType::PointsArrayType(4)))),
+      mLaplacianShiftedBoundarySplit2D3N(0, Element::GeometryType::Pointer(new Triangle2D3<Node<3> >(Element::GeometryType::PointsArrayType(3)))),
+      mLaplacianShiftedBoundarySplit3D4N(0, Element::GeometryType::Pointer(new Tetrahedra3D4<Node<3> >(Element::GeometryType::PointsArrayType(4)))),
       mAdjointDiffusionElement2D3N(0, Element::GeometryType::Pointer(new Triangle2D3<Node<3> >(Element::GeometryType::PointsArrayType(3)))),
       mAdjointDiffusionElement3D4N(0, Element::GeometryType::Pointer(new Tetrahedra3D4<Node<3> >(Element::GeometryType::PointsArrayType(4)))),
       mThermalFace2D2N(0, Element::GeometryType::Pointer(new Line2D2<Node<3> >(Element::GeometryType::PointsArrayType(2)))),
@@ -104,6 +106,8 @@ void KratosConvectionDiffusionApplication::Register() {
     KRATOS_REGISTER_ELEMENT("LaplacianElement3D27N", mLaplacian3D27N);
     KRATOS_REGISTER_ELEMENT("LaplacianShiftedBoundaryElement2D3N", mLaplacianShiftedBoundary2D3N);
     KRATOS_REGISTER_ELEMENT("LaplacianShiftedBoundaryElement3D4N", mLaplacianShiftedBoundary3D4N);
+    KRATOS_REGISTER_ELEMENT("LaplacianShiftedBoundarySplitElement2D3N", mLaplacianShiftedBoundarySplit2D3N);
+    KRATOS_REGISTER_ELEMENT("LaplacianShiftedBoundarySplitElement3D4N", mLaplacianShiftedBoundarySplit3D4N);
     KRATOS_REGISTER_ELEMENT("QSConvectionDiffusionExplicit2D3N", mQSConvectionDiffusionExplicit2D3N);
     KRATOS_REGISTER_ELEMENT("QSConvectionDiffusionExplicit3D4N", mQSConvectionDiffusionExplicit3D4N);
     KRATOS_REGISTER_ELEMENT("DConvectionDiffusionExplicit2D3N", mDConvectionDiffusionExplicit2D3N);
