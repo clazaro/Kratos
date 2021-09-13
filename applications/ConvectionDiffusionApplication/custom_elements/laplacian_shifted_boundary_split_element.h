@@ -9,7 +9,7 @@
 //  Main authors:    Ruben Zorrilla
 //
 
-#if !defined(KRATOS_LAPLACIAN_SHIFTED_BOUNDARY_SPLIT_ELEMENT_H_INCLUDED )
+#ifndef KRATOS_LAPLACIAN_SHIFTED_BOUNDARY_SPLIT_ELEMENT_H_INCLUDED
 #define  KRATOS_LAPLACIAN_SHIFTED_BOUNDARY_SPLIT_ELEMENT_H_INCLUDED
 
 // System includes
@@ -19,6 +19,7 @@
 // Project includes
 #include "includes/define.h"
 #include "includes/element.h"
+#include "modified_shape_functions/modified_shape_functions.h"
 
 // Application includes
 #include "laplacian_element.h"
@@ -146,6 +147,10 @@ protected:
     ///@name Protected Operators
     ///@{
 
+    void AddBoundaryElementContribution(
+        MatrixType& rLeftHandSideMatrix,
+        VectorType& rRightHandSideVector,
+        const ProcessInfo& rCurrentProcessInfo);
 
     ///@}
     ///@name Protected Operations
@@ -177,6 +182,7 @@ private:
     ///@name Static Member Variables
     ///@{
 
+    static const std::size_t mNumNodes = TDim + 1;
 
     ///@}
     ///@name Member Variables
@@ -208,6 +214,10 @@ private:
     ///@name Private Operations
     ///@{
 
+    void SetNodalDistancesVector(
+        const GeometryType& rGeometry,
+        Vector& rNodalDistances);
+
     std::vector<std::size_t> GetSurrogateFacesIds();
 
     ///@}
@@ -233,6 +243,14 @@ private:
     ///@}
 
 }; // Class LaplacianShiftedBoundarySplitElement
+
+namespace ShiftedBoundarySplitInternals {
+
+template <size_t TDim, size_t TNumNodes>
+ModifiedShapeFunctions::Pointer GetContinuousShapeFunctionCalculator(
+    const Element &rElement,
+    const Vector &rNodalDistances);
+}
 
 ///@}
 
