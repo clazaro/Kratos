@@ -25,6 +25,8 @@
 // Application includes
 #include "custom_elements/laplacian_shifted_boundary_split_element.h"
 
+#include "modified_shape_functions/triangle_2d_3_modified_shape_functions.h"
+#include "modified_shape_functions/tetrahedra_3d_4_modified_shape_functions.h"
 
 namespace Kratos
 {
@@ -85,9 +87,11 @@ void LaplacianShiftedBoundarySplitElement<TDim>::CalculateLocalSystem(
     // Add base Laplacian contribution
     BaseType::CalculateLocalSystem(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo);
 
-    // Check if the element belongs to the surrogate interface
-    // Note that the INTERFACE flag is assumed to be set in the layer of elements attached to the surrogate interface
-    if (Is(INTERFACE)) {
+    // Check if the element belongs to the intersected ones
+    // Note that the BOUNDARY flag is assumed to be set in the elements which are cut by the embedded geometry
+    if (Is(BOUNDARY)) {
+
+        /*
         // Get convection-diffusion data container
         auto p_settings = rCurrentProcessInfo[CONVECTION_DIFFUSION_SETTINGS];
         auto &r_settings = *p_settings;
@@ -158,7 +162,7 @@ void LaplacianShiftedBoundarySplitElement<TDim>::CalculateLocalSystem(
                     }
                 }
             }
-        }
+        }*/
     }
 
     KRATOS_CATCH("")
@@ -172,9 +176,11 @@ void LaplacianShiftedBoundarySplitElement<TDim>::CalculateLeftHandSide(
     // Add base Laplacian contribution
     BaseType::CalculateLeftHandSide(rLeftHandSideMatrix, rCurrentProcessInfo);
 
-    // Check if the element belongs to the surrogate interface
-    // Note that the INTERFACE flag is assumed to be set in the layer of elements attached to the surrogate interface
-    if (Is(INTERFACE)) {
+    // Check if the element belongs to the intersected ones
+    // Note that the BOUNDARY flag is assumed to be set in the elements which are cut by the embedded geometry
+    if (Is(BOUNDARY)) {
+
+        /*
         // Get convection-diffusion data container
         auto p_settings = rCurrentProcessInfo[CONVECTION_DIFFUSION_SETTINGS];
         auto &r_settings = *p_settings;
@@ -237,7 +243,7 @@ void LaplacianShiftedBoundarySplitElement<TDim>::CalculateLeftHandSide(
                     }
                 }
             }
-        }
+        }*/
     }
 }
 
@@ -249,9 +255,11 @@ void LaplacianShiftedBoundarySplitElement<TDim>::CalculateRightHandSide(
     // Add base Laplacian contribution
     BaseType::CalculateRightHandSide(rRightHandSideVector, rCurrentProcessInfo);
 
-    // Check if the element belongs to the surrogate interface
-    // Note that the INTERFACE flag is assumed to be set in the layer of elements attached to the surrogate interface
-    if (Is(INTERFACE)) {
+    /// Check if the element belongs to the intersected ones
+    // Note that the BOUNDARY flag is assumed to be set in the elements which are cut by the embedded geometry
+    if (Is(BOUNDARY)) {
+
+        /*
         // Get convection-diffusion data container
         auto p_settings = rCurrentProcessInfo[CONVECTION_DIFFUSION_SETTINGS];
         auto &r_settings = *p_settings;
@@ -321,7 +329,7 @@ void LaplacianShiftedBoundarySplitElement<TDim>::CalculateRightHandSide(
                     }
                 }
             }
-        }
+        }*/
     }
 }
 
@@ -334,7 +342,7 @@ int LaplacianShiftedBoundarySplitElement<TDim>::Check(const ProcessInfo& rCurren
     return BaseType::Check(rCurrentProcessInfo);
 }
 
-template<std::size_t TDim>
+/*template<std::size_t TDim>
 std::vector<std::size_t> LaplacianShiftedBoundarySplitElement<TDim>::GetSurrogateFacesIds()
 {
     const std::size_t n_faces = TDim + 1;
@@ -351,7 +359,7 @@ std::vector<std::size_t> LaplacianShiftedBoundarySplitElement<TDim>::GetSurrogat
     }
 
     return surrogate_faces_ids;
-}
+}*/
 
 template class LaplacianShiftedBoundarySplitElement<2>;
 template class LaplacianShiftedBoundarySplitElement<3>;
