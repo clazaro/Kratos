@@ -460,6 +460,32 @@ public:
         if (mComputeModalDecompostion) {
             ComputeModalDecomposition(Eigenvectors);
         }
+        // KRATOS_WATCH(rMassMatrix)
+        // KRATOS_WATCH(Eigenvalues)
+        // KRATOS_WATCH(Eigenvectors)
+        const int eigen_values_size = Eigenvalues.size();
+        const int eigen_vector_size = rMassMatrix.size1();
+        DenseVectorType identity = ZeroVector(eigen_vector_size);
+        for (int i = 0; i < eigen_vector_size; i++)
+            identity(i) = 1.0;
+        DenseVectorType ModalParticipation;
+        ModalParticipation.resize(eigen_values_size, false);
+
+        for (int mode = 0; mode < eigen_values_size; mode++) {
+            DenseVectorType modal_eigen_vectors;
+            DenseVectorType aux;
+            aux.resize(eigen_vector_size, false);
+            modal_eigen_vectors.resize(eigen_vector_size, false);
+
+            for (int comp = 0; comp < eigen_vector_size; comp++)
+                modal_eigen_vectors(comp) = Eigenvectors(mode, comp);
+
+            noalias(aux) = prod(trans(modal_eigen_vectors), rMassMatrix);
+            const double num   = inner_prod(aux, identity);
+            const double denom = inner_prod(aux, modal_eigen_vectors);
+            ModalParticipation(mode) = num / denom;
+        }
+        KRATOS_WATCH(ModalParticipation)
 
         return true;
         KRATOS_CATCH("")
