@@ -183,11 +183,22 @@ protected:
 
     /**
      * @brief Intersected element data structure initialization
-     * This method sets the data structure geometry fields (shape functions, gradients, interface normals, ...) for an
+     * This method sets the data structure geometry fields (shape functions, gradients) for an
      * intersected element. To do that, the modified shape functions utility is firstly created and then called
-     * to perform all operations on both, the positive and negative, sides of the element.
+     * to perform all operations on the positive side of the element.
      */
     void InitializeGeometryData(
+        const GeometryType& rGeometry);
+
+    /**
+     * @brief Calculation of local system for intersected elements
+     * This method calculates the local system of an intersected element by performing a volume integral 
+     * of its positive side only.
+     */
+    void AddPositiveSideToSystem(
+        MatrixType& rLeftHandSideMatrix,
+        VectorType& rRightHandSideVector,
+        const ProcessInfo& rCurrentProcessInfo,
         const GeometryType& rGeometry);
 
     ///@}
