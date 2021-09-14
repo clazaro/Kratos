@@ -471,15 +471,14 @@ public:
         DenseVectorType ModalParticipation;
         ModalParticipation.resize(eigen_values_size, false);
 
-        for (int mode = 0; mode < eigen_values_size; mode++) {
-            DenseVectorType modal_eigen_vectors;
-            DenseVectorType aux;
-            aux.resize(eigen_vector_size, false);
-            modal_eigen_vectors.resize(eigen_vector_size, false);
+        DenseVectorType modal_eigen_vectors;
+        DenseVectorType aux;
+        aux.resize(eigen_vector_size, false);
+        modal_eigen_vectors.resize(eigen_vector_size, false);
 
+        for (int mode = 0; mode < eigen_values_size; mode++) {
             for (int comp = 0; comp < eigen_vector_size; comp++)
                 modal_eigen_vectors(comp) = Eigenvectors(mode, comp);
-
             noalias(aux) = prod(trans(modal_eigen_vectors), rMassMatrix);
             const double num   = inner_prod(aux, identity);
             const double denom = inner_prod(aux, modal_eigen_vectors);
