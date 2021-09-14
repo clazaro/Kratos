@@ -6,7 +6,7 @@
 //  License:         BSD License
 //                   Kratos default license: kratos/license.txt
 //
-//  Main authors:    Ruben Zorrilla
+//  Main authors:    Ruben Zorrilla, Franziska Wahl
 //
 
 // System includes
@@ -103,11 +103,10 @@ void LaplacianShiftedBoundarySplitElement<TDim>::CalculateLocalSystem(
         noalias(rRightHandSideVector) = ZeroVector(num_points);
 
         // Set up the distances vector
-        Vector nodal_distances(mNumNodes);
-        SetNodalDistancesVector(r_geom, nodal_distances);
+        //SetNodalDistancesVector(r_geom, mNodalDistances);
 
-        //TODO set shape functions and splitting
-        //this->InitializeGeometryData(data);
+        //Get nodal distances and set splitting and shape functions
+        InitializeGeometryData(r_geom);
 
         //TODO integrate over positive (??) side of the element
         /*
@@ -133,9 +132,9 @@ void LaplacianShiftedBoundarySplitElement<TDim>::CalculateLocalSystem(
 
         // Check if the element belongs to the surrogate interface
         // Note that the INTERFACE flag is assumed to be set in the layer of elements attached to the surrogate interface
-        if (Is(INTERFACE)) {
-            //AddBoundaryElementContribution(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo);
-        }
+        /*if (Is(INTERFACE)) {
+            AddBoundaryElementContribution(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo);
+        }*/
     }
 
     KRATOS_CATCH("")
@@ -146,10 +145,8 @@ void LaplacianShiftedBoundarySplitElement<TDim>::CalculateLeftHandSide(
     MatrixType& rLeftHandSideMatrix,
     const ProcessInfo& rCurrentProcessInfo)
 {
-    //TODO check for BOUNDARY
-    //TODO add volume integral
-    // Add base Laplacian contribution
-    BaseType::CalculateLeftHandSide(rLeftHandSideMatrix, rCurrentProcessInfo);
+    VectorType temp(0);
+    CalculateLocalSystem(rLeftHandSideMatrix, temp, rCurrentProcessInfo);
 }
 
 template<std::size_t TDim>
@@ -157,17 +154,13 @@ void LaplacianShiftedBoundarySplitElement<TDim>::CalculateRightHandSide(
     VectorType& rRightHandSideVector,
     const ProcessInfo& rCurrentProcessInfo)
 {
-    //TODO check for BOUNDARY
-    //TODO add volume integral
-    // Add base Laplacian contribution
-    BaseType::CalculateRightHandSide(rRightHandSideVector, rCurrentProcessInfo);
+    MatrixType temp(0,0);
+    CalculateLocalSystem(temp, rRightHandSideVector, rCurrentProcessInfo);
 }
 
 template<std::size_t TDim>
 int LaplacianShiftedBoundarySplitElement<TDim>::Check(const ProcessInfo& rCurrentProcessInfo) const
 {
-    //TODO Surrogate boundary checks
-
     // Base Laplacian element check
     return BaseType::Check(rCurrentProcessInfo);
 }
@@ -176,6 +169,56 @@ int LaplacianShiftedBoundarySplitElement<TDim>::Check(const ProcessInfo& rCurren
 // Protected functions
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+template<std::size_t TDim>
+void LaplacianShiftedBoundarySplitElement<TDim>::InitializeGeometryData(
+    const GeometryType& rGeometry)
+{
+    // Get nodal distances
+    if (mNodalDistances.size() != NumNodes) {
+        mNodalDistances.resize(NumNodes);
+    }
+    for (std::size_t i = 0; i < NumNodes; ++i) {
+        mNodalDistances[i] = rGeometry[i].FastGetSolutionStepValue(DISTANCE);
+    }
+
+    // Number and indices of positive and negative distance function values
+    mNumPositiveNodes = 0;
+    mNumNegativeNodes = 0;
+    mPositiveIndices.clear();
+    mNegativeIndices.clear();
+
+    for (std::size_t i = 0; i < NumNodes; ++i){
+        if (mNodalDistances[i] > 0.0){
+            mNumPositiveNodes++;
+            mPositiveIndices.push_back(i);
+        } else {
+            mNumNegativeNodes++;
+            mNegativeIndices.push_back(i);
+        }
+    }
+
+    // Get shape function calculator
+    ModifiedShapeFunctions::Pointer p_calculator =
+        ShiftedBoundarySplitInternals::GetContinuousShapeFunctionCalculator<TDim, NumNodes>(
+            *this,
+            mNodalDistances);
+
+    // Positive side volume
+    p_calculator->ComputePositiveSideShapeFunctionsAndGradientsValues(
+        mPositiveSideN,
+        mPositiveSideDNDX,
+        mPositiveSideWeights,
+        GeometryData::GI_GAUSS_2);
+
+    // Negative side volume
+    /*p_calculator->ComputeNegativeSideShapeFunctionsAndGradientsValues(
+        mNegativeSideN,
+        mNegativeSideDNDX,
+        mNegativeSideWeights,
+        GeometryData::GI_GAUSS_2);*/
+}
+
+/*
 template<std::size_t TDim>
 void LaplacianShiftedBoundarySplitElement<TDim>::AddBoundaryElementContribution(
     MatrixType& rLeftHandSideMatrix,
@@ -253,25 +296,26 @@ void LaplacianShiftedBoundarySplitElement<TDim>::AddBoundaryElementContribution(
             }
         }
     }
-}
+}*/
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Private functions
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+/*
 template<std::size_t TDim>
 void LaplacianShiftedBoundarySplitElement<TDim>::SetNodalDistancesVector(
-    const GeometryType& rGeometry,
-    Vector& rNodalDistances)
+    const GeometryType& rGeometry)
 {
-    if (rNodalDistances.size() != mNumNodes) {
-        rNodalDistances.resize(mNumNodes);
+    if (mNodalDistances.size() != NumNodes) {
+        mNodalDistances.resize(NumNodes);
     }
-    for (std::size_t i_node = 0; i_node < mNumNodes; ++i_node) {
-        rNodalDistances[i_node] = rGeometry[i_node].FastGetSolutionStepValue(DISTANCE);
+    for (std::size_t i = 0; i < NumNodes; ++i) {
+        mNodalDistances[i] = rGeometry[i].FastGetSolutionStepValue(DISTANCE);
     }
-}
+}*/
 
+/*
 template<std::size_t TDim>
 std::vector<std::size_t> LaplacianShiftedBoundarySplitElement<TDim>::GetSurrogateFacesIds()
 {
@@ -289,7 +333,7 @@ std::vector<std::size_t> LaplacianShiftedBoundarySplitElement<TDim>::GetSurrogat
     }
 
     return surrogate_faces_ids;
-}
+}*/
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Helper functions for template specialization

@@ -6,7 +6,7 @@
 //  License:         BSD License
 //                   Kratos default license: kratos/license.txt
 //
-//  Main authors:    Ruben Zorrilla
+//  Main authors:    Ruben Zorrilla, Franziska Wahl
 //
 
 #ifndef KRATOS_LAPLACIAN_SHIFTED_BOUNDARY_SPLIT_ELEMENT_H_INCLUDED
@@ -23,6 +23,7 @@
 
 // Application includes
 #include "laplacian_element.h"
+//#include "custom_utilities/shifted_boundary_split_data.h"
 
 namespace Kratos
 {
@@ -57,8 +58,11 @@ public:
     KRATOS_CLASS_INTRUSIVE_POINTER_DEFINITION(LaplacianShiftedBoundarySplitElement);
 
     typedef LaplacianElement BaseType;
+    typedef GeometryData::ShapeFunctionsGradientsType ShapeFunctionsGradientsType;
 
     static constexpr std::size_t NumNodes = TDim + 1;
+
+    using NodalScalarData = array_1d<double,NumNodes>;
 
     ///@}
     ///@name Life Cycle
@@ -142,20 +146,54 @@ protected:
     ///@name Protected member Variables
     ///@{
 
+    //double SlipLength;
+    //double PenaltyCoefficient;
+
+    NodalScalarData mNodalDistances;
+
+    Matrix mPositiveSideN;
+    //Matrix mNegativeSideN;
+    ShapeFunctionsGradientsType mPositiveSideDNDX;
+    //ShapeFunctionsGradientsType mNegativeSideDNDX;
+    Vector mPositiveSideWeights;
+    //Vector mNegativeSideWeights;
+
+    /*Matrix PositiveInterfaceN;
+    Matrix NegativeInterfaceN;
+    ShapeFunctionsGradientsType PositiveInterfaceDNDX;
+    ShapeFunctionsGradientsType NegativeInterfaceDNDX;
+    Vector PositiveInterfaceWeights;
+    Vector NegativeInterfaceWeights;
+    InterfaceNormalsType PositiveInterfaceUnitNormals;
+    InterfaceNormalsType NegativeInterfaceUnitNormals;*/
+
+    std::vector< size_t > mPositiveIndices;
+    std::vector< size_t > mNegativeIndices;
+
+    size_t mNumPositiveNodes;
+    size_t mNumNegativeNodes;
 
     ///@}
     ///@name Protected Operators
     ///@{
 
-    void AddBoundaryElementContribution(
-        MatrixType& rLeftHandSideMatrix,
-        VectorType& rRightHandSideVector,
-        const ProcessInfo& rCurrentProcessInfo);
-
     ///@}
     ///@name Protected Operations
     ///@{
 
+    /**
+     * @brief Intersected element data structure initialization
+     * This method sets the data structure geometry fields (shape functions, gradients, interface normals, ...) for an
+     * intersected element. To do that, the modified shape functions utility is firstly created and then called
+     * to perform all operations on both, the positive and negative, sides of the element.
+     */
+    void InitializeGeometryData(
+        const GeometryType& rGeometry);
+
+    /*void AddBoundaryElementContribution(
+        MatrixType& rLeftHandSideMatrix,
+        VectorType& rRightHandSideVector,
+        const ProcessInfo& rCurrentProcessInfo);*/
 
     ///@}
     ///@name Protected  Access
@@ -181,8 +219,6 @@ protected:
 private:
     ///@name Static Member Variables
     ///@{
-
-    static const std::size_t mNumNodes = TDim + 1;
 
     ///@}
     ///@name Member Variables
@@ -214,11 +250,10 @@ private:
     ///@name Private Operations
     ///@{
 
-    void SetNodalDistancesVector(
-        const GeometryType& rGeometry,
-        Vector& rNodalDistances);
+    /*void SetNodalDistancesVector(
+        const GeometryType& rGeometry);*/
 
-    std::vector<std::size_t> GetSurrogateFacesIds();
+    //std::vector<std::size_t> GetSurrogateFacesIds();
 
     ///@}
     ///@name Private  Access
