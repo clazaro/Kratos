@@ -190,11 +190,6 @@ protected:
     void InitializeGeometryData(
         const GeometryType& rGeometry);
 
-    /*void AddBoundaryElementContribution(
-        MatrixType& rLeftHandSideMatrix,
-        VectorType& rRightHandSideVector,
-        const ProcessInfo& rCurrentProcessInfo);*/
-
     ///@}
     ///@name Protected  Access
     ///@{
@@ -250,10 +245,6 @@ private:
     ///@name Private Operations
     ///@{
 
-    /*void SetNodalDistancesVector(
-        const GeometryType& rGeometry);*/
-
-    //std::vector<std::size_t> GetSurrogateFacesIds();
 
     ///@}
     ///@name Private  Access
