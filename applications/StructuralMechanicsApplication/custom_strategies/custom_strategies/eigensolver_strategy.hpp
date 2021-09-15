@@ -478,7 +478,10 @@ public:
         modal_eigen_vectors.resize(eigen_vector_size, false);
 
         for (int mode = 0; mode < eigen_values_size; mode++) {
-            TDenseSpace::GetColumn(mode, DenseMatrixType(trans(Eigenvectors)), modal_eigen_vectors);
+            // TDenseSpace::GetColumn(mode, DenseMatrixType(trans(Eigenvectors)), modal_eigen_vectors);
+            for (int comp = 0; comp < modal_eigen_vectors.size(); comp++) {
+                modal_eigen_vectors(comp) = Eigenvectors(mode, comp);
+            }
             SparseSpaceType::Mult(rMassMatrix, modal_eigen_vectors, aux);
             const double num   = SparseSpaceType::Dot(aux, identity);
             const double denom = SparseSpaceType::Dot(aux, modal_eigen_vectors);
