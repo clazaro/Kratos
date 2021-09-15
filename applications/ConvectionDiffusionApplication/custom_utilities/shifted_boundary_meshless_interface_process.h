@@ -121,6 +121,9 @@ public:
         std::string interface_condition_name = ThisParameters["sbm_interface_condition_name"].GetString();
         KRATOS_ERROR_IF(interface_condition_name == "") << "SBM interface condition has not been provided." << std::endl;
         mpConditionPrototype = &KratosComponents<Condition>::Get(interface_condition_name);
+
+        //if true, the intersected boundary elements will be set ACTIVE in order to assemble them
+        mUseBoundarySplitting = ThisParameters["use_boundary_splitting"].GetBool();
     };
 
     /// Destructor.
@@ -151,7 +154,8 @@ public:
             "boundary_sub_model_part_name" : "",
             "sbm_interface_condition_name" : "",
             "mls_extension_operator_order" : 1,
-            "mls_conforming_basis" : true
+            "mls_conforming_basis" : true,
+            "use_boundary_splitting" : false
         })" );
 
         return default_parameters;
@@ -240,6 +244,8 @@ private:
     std::size_t mMLSExtensionOperatorOrder;
 
     const Condition* mpConditionPrototype;
+
+    bool mUseBoundarySplitting = true;
 
     ///@}
     ///@name Private Operators
@@ -440,6 +446,22 @@ private:
                 }
             }
         }
+
+        // Make BOUNDARY elements and their nodes ACTIVE if they are split for volume integration
+        if (mUseBoundarySplitting) {
+            for (auto& rElement : mpModelPart->Elements()) {
+                // Check if the element is split
+                const auto& r_geom = rElement.GetGeometry();
+                if (IsSplit(r_geom)) {
+                    // Mark the boundary element as ACTIVE to assemble it
+                    rElement.Set(ACTIVE, true);
+                    // Mark the boundary element's nodes as ACTIVE
+                    for (auto& rNode : r_geom) {
+                        rNode.Set(ACTIVE, true);
+                    }
+                }
+            }
+        }
     }
 
     void CalculateNonConformingExtensionBasis()
@@ -529,6 +551,22 @@ private:
                     //FIXME: Find variables for these
                     p_cond->SetValue(BDF_COEFFICIENTS, N_container);
                     p_cond->SetValue(LOCAL_AXES_MATRIX, DN_DX_container);
+                }
+            }
+        }
+
+        // Make BOUNDARY elements and their nodes ACTIVE if they are split for volume integration
+        if (mUseBoundarySplitting) {
+            for (auto& rElement : mpModelPart->Elements()) {
+                // Check if the element is split
+                const auto& r_geom = rElement.GetGeometry();
+                if (IsSplit(r_geom)) {
+                    // Mark the boundary element as ACTIVE to assemble it
+                    rElement.Set(ACTIVE, true);
+                    // Mark the boundary element's nodes as ACTIVE
+                    for (auto& rNode : r_geom) {
+                        rNode.Set(ACTIVE, true);
+                    }
                 }
             }
         }
