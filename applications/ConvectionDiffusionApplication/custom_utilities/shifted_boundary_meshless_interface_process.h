@@ -245,7 +245,7 @@ private:
 
     const Condition* mpConditionPrototype;
 
-    bool mUseBoundarySplitting = true;
+    bool mUseBoundarySplitting;
 
     ///@}
     ///@name Private Operators

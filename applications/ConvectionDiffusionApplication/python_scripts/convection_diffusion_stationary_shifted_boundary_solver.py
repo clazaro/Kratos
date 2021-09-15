@@ -99,7 +99,7 @@ class ConvectionDiffusionStationaryShiftedBoundarySolver(convection_diffusion_st
             sbm_interface_condition_name = "LaplacianShiftedBoundaryCondition"
         settings.AddEmptyValue("sbm_interface_condition_name").SetString(sbm_interface_condition_name)
         settings.AddEmptyValue("use_boundary_splitting").SetBool(
-            self.settings["element_replace_settings"]["element_name"].GetString() == "LaplacianShiftedBoundarySplitElement")
+            self.settings["element_replace_settings"]["element_name"].GetString()[:-4] == "LaplacianShiftedBoundarySplitElement")
         sbm_interface_process = ConvectionDiffusionApplication.ShiftedBoundaryMeshlessInterfaceProcess(self.model, settings)
         sbm_interface_process.Execute()
 
