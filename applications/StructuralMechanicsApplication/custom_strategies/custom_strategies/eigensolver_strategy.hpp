@@ -480,8 +480,8 @@ public:
         for (int mode = 0; mode < eigen_values_size; mode++) {
             TDenseSpace::GetColumn(mode, DenseMatrixType(trans(Eigenvectors)), modal_eigen_vectors);
             SparseSpaceType::Mult(rMassMatrix, modal_eigen_vectors, aux);
-            const double num   = inner_prod(aux, identity);
-            const double denom = inner_prod(aux, modal_eigen_vectors);
+            const double num   = SparseSpaceType::Dot(aux, identity);
+            const double denom = SparseSpaceType::Dot(aux, modal_eigen_vectors);
             ModalParticipation(mode) = num / denom;
             std::cout << "MODE: " << mode << " -> Modal participation: " << ModalParticipation(mode) << std::endl;
         }
