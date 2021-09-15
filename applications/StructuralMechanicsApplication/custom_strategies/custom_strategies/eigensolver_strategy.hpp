@@ -460,14 +460,15 @@ public:
         if (mComputeModalDecompostion) {
             ComputeModalDecomposition(Eigenvectors);
         }
-        // KRATOS_WATCH(rMassMatrix)
-        // KRATOS_WATCH(Eigenvalues)
-        // KRATOS_WATCH(Eigenvectors)
+
+
+
+
+
         const int eigen_values_size = Eigenvalues.size();
         const int eigen_vector_size = rMassMatrix.size1();
         DenseVectorType identity = ZeroVector(eigen_vector_size);
-        for (int i = 0; i < eigen_vector_size; i++)
-            identity(i) = 1.0;
+        SparseSpaceType::Set(identity, 1.0);
         DenseVectorType ModalParticipation;
         ModalParticipation.resize(eigen_values_size, false);
 
@@ -477,14 +478,19 @@ public:
         modal_eigen_vectors.resize(eigen_vector_size, false);
 
         for (int mode = 0; mode < eigen_values_size; mode++) {
-            for (int comp = 0; comp < eigen_vector_size; comp++)
-                modal_eigen_vectors(comp) = Eigenvectors(mode, comp);
-            noalias(aux) = prod(trans(modal_eigen_vectors), rMassMatrix);
+            TDenseSpace::GetColumn(mode, DenseMatrixType(trans(Eigenvectors)), modal_eigen_vectors);
+            SparseSpaceType::Mult(rMassMatrix, modal_eigen_vectors, aux);
             const double num   = inner_prod(aux, identity);
             const double denom = inner_prod(aux, modal_eigen_vectors);
             ModalParticipation(mode) = num / denom;
+            std::cout << "MODE: " << mode << " -> Modal participation: " << ModalParticipation(mode) << std::endl;
         }
-        KRATOS_WATCH(ModalParticipation)
+        // KRATOS_WATCH(ModalParticipation)
+
+
+
+
+
 
         return true;
         KRATOS_CATCH("")
