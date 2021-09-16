@@ -483,7 +483,7 @@ public:
                 modal_eigen_vectors(comp) = Eigenvectors(mode, comp);
             }
             SparseSpaceType::Mult(rMassMatrix, modal_eigen_vectors, aux);
-            const double num   = SparseSpaceType::Dot(aux, identity);
+            const double num   = std::pow(SparseSpaceType::Dot(aux, identity),2);
             const double denom = SparseSpaceType::Dot(aux, modal_eigen_vectors);
             ModalParticipation(mode) = num / denom;
             std::cout << "MODE: " << mode << " -> Modal participation: " << ModalParticipation(mode) << std::endl;
