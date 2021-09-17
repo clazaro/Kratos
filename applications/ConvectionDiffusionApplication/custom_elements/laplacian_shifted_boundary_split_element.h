@@ -47,6 +47,11 @@ namespace Kratos
 ///@name Kratos Classes
 ///@{
 
+// Forward declaration of data container class
+namespace LaplacianSplitInternals {
+    template<std::size_t TDim> class SplitElementData;
+} 
+
 template<std::size_t TDim>
 class LaplacianShiftedBoundarySplitElement : public LaplacianElement
 {
@@ -63,6 +68,7 @@ public:
     static constexpr std::size_t NumNodes = TDim + 1;
 
     using NodalScalarData = array_1d<double,NumNodes>;
+    using SplitElementData = LaplacianSplitInternals::SplitElementData < TDim >;
 
     ///@}
     ///@name Life Cycle
@@ -146,33 +152,6 @@ protected:
     ///@name Protected member Variables
     ///@{
 
-    //double SlipLength;
-    //double PenaltyCoefficient;
-
-    NodalScalarData mNodalDistances;
-
-    Matrix mPositiveSideN;
-    //Matrix mNegativeSideN;
-    ShapeFunctionsGradientsType mPositiveSideDNDX;
-    //ShapeFunctionsGradientsType mNegativeSideDNDX;
-    Vector mPositiveSideWeights;
-    //Vector mNegativeSideWeights;
-
-    /*Matrix PositiveInterfaceN;
-    Matrix NegativeInterfaceN;
-    ShapeFunctionsGradientsType PositiveInterfaceDNDX;
-    ShapeFunctionsGradientsType NegativeInterfaceDNDX;
-    Vector PositiveInterfaceWeights;
-    Vector NegativeInterfaceWeights;
-    InterfaceNormalsType PositiveInterfaceUnitNormals;
-    InterfaceNormalsType NegativeInterfaceUnitNormals;*/
-
-    std::vector< size_t > mPositiveIndices;
-    std::vector< size_t > mNegativeIndices;
-
-    size_t mNumPositiveNodes;
-    size_t mNumNegativeNodes;
-
     ///@}
     ///@name Protected Operators
     ///@{
@@ -188,7 +167,7 @@ protected:
      * to perform all operations on the positive side of the element.
      */
     void InitializeGeometryData(
-        const GeometryType& rGeometry);
+        SplitElementData& rData);
 
     /**
      * @brief Calculation of local system for intersected elements
@@ -199,7 +178,7 @@ protected:
         MatrixType& rLeftHandSideMatrix,
         VectorType& rRightHandSideVector,
         const ProcessInfo& rCurrentProcessInfo,
-        const GeometryType& rGeometry);
+        const SplitElementData& rData);
 
     ///@}
     ///@name Protected  Access
@@ -281,13 +260,81 @@ private:
 
 }; // Class LaplacianShiftedBoundarySplitElement
 
-namespace ShiftedBoundarySplitInternals {
+namespace LaplacianSplitInternals {
 
 template <size_t TDim, size_t TNumNodes>
 ModifiedShapeFunctions::Pointer GetContinuousShapeFunctionCalculator(
     const Element &rElement,
     const Vector &rNodalDistances);
-}
+
+template<std::size_t TDim>
+class SplitElementData
+{
+public:
+    ///@name Type Definitions
+    ///@{
+
+    static constexpr std::size_t NumNodes = TDim + 1;
+
+    typedef GeometryData::ShapeFunctionsGradientsType ShapeFunctionsGradientsType;
+    typedef std::vector< Vector > InterfaceNormalsType;
+    typedef array_1d<double,NumNodes> NodalScalarData;
+
+    ///@}
+    ///@name Public Members
+    ///@{
+
+    //double SlipLength;
+    //double PenaltyCoefficient;
+
+    NodalScalarData NodalDistances;
+
+    Matrix PositiveSideN;
+    //Matrix mNegativeSideN;
+    ShapeFunctionsGradientsType PositiveSideDNDX;
+    //ShapeFunctionsGradientsType mNegativeSideDNDX;
+    Vector PositiveSideWeights;
+    //Vector mNegativeSideWeights;
+
+    Matrix PositiveInterfaceN;
+    //Matrix NegativeInterfaceN;
+    ShapeFunctionsGradientsType PositiveInterfaceDNDX;
+    //ShapeFunctionsGradientsType NegativeInterfaceDNDX;
+    Vector PositiveInterfaceWeights;
+    //Vector NegativeInterfaceWeights;
+    InterfaceNormalsType PositiveInterfaceUnitNormals;
+    //InterfaceNormalsType NegativeInterfaceUnitNormals;*/
+
+    std::vector< size_t > PositiveIndices;
+    //std::vector< size_t > NegativeIndices;
+
+    size_t NumPositiveNodes;
+    size_t NumNegativeNodes;
+
+    ///@}
+    ///@name Public Operations
+    ///@{
+
+    /**
+     * @brief Split element data container initialization
+     * This method initializes the embedded formulation data container. This implies to get the nodal distances.
+     */
+    void Initialize(
+        const Element& rElement
+    );
+
+    /**
+     * @brief Checks if the current element is intersected
+     * Checks if the current element is intersected by checking the number of positive and negative distance nodes.
+     * @return true if the element is intersected
+     * @return false if the element is not intersected
+     */
+    bool IsSplit();
+
+    ///@}
+};
+
+} //namespace LaplacianSplitInternals
 
 ///@}
 
@@ -298,7 +345,6 @@ ModifiedShapeFunctions::Pointer GetContinuousShapeFunctionCalculator(
 ///@}
 ///@name Input and output
 ///@{
-
 
 /// input stream function
 /*  inline std::istream& operator >> (std::istream& rIStream,

@@ -84,20 +84,30 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::CalculateLocalSystem(
 {
     KRATOS_TRY
 
+    SplitElementData data;
+    data.Initialize(*this);
+
     // Check if the element belongs to the intersected ones
     // Note that the BOUNDARY flag is assumed to be set in the elements which are cut by the embedded geometry
-    if (Is(BOUNDARY)) {
+    if (data.IsSplit()) {
 
-        const auto& r_geom = GetGeometry();
+        // Get nodal distances and set splitting and shape functions
+        InitializeGeometryData(data);
 
-        //Get nodal distances and set splitting and shape functions
-        InitializeGeometryData(r_geom);
+        // Calculate and add local system for the positive side of the element
+        AddPositiveSideToSystem(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo, data);
+        
+        // Calculate and add boundary terms
+        //AddBoundaryTerms(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo, data;
 
-        //Calculate local system for the positive side of the element
-        AddPositiveSideToSystem(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo, r_geom);
+        //Calculate and add Nitsche terms for weak imposition of boundary condition
+        //AddNormalPenaltyContribution()
+        //AddNormalSymmetricCounterpartContribution()
+        //AddTangentialPenaltyContribution()
+        //AddTangentialSymmetricCounterpartContribution()
 
     } else {
-        // Add base Laplacian contribution
+        // Add base Laplacian contribution (standard Galerkin)
         BaseType::CalculateLocalSystem(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo);
     }
 
@@ -135,50 +145,26 @@ int LaplacianShiftedBoundarySplitElement<TTDim>::Check(const ProcessInfo& rCurre
 
 template<std::size_t TTDim>
 void LaplacianShiftedBoundarySplitElement<TTDim>::InitializeGeometryData(
-    const GeometryType& rGeometry)
+    SplitElementData& rData)
 {
-    // Get nodal distances
-    if (mNodalDistances.size() != NumNodes) {
-        mNodalDistances.resize(NumNodes);
-    }
-    for (std::size_t i = 0; i < NumNodes; ++i) {
-        mNodalDistances[i] = rGeometry[i].FastGetSolutionStepValue(DISTANCE);
-    }
-
-    // Number and indices of positive and negative distance function values
-    mNumPositiveNodes = 0;
-    mNumNegativeNodes = 0;
-    mPositiveIndices.clear();
-    mNegativeIndices.clear();
-
-    for (std::size_t i = 0; i < NumNodes; ++i){
-        if (mNodalDistances[i] > 0.0){
-            mNumPositiveNodes++;
-            mPositiveIndices.push_back(i);
-        } else {
-            mNumNegativeNodes++;
-            mNegativeIndices.push_back(i);
-        }
-    }
-
     // Get shape function calculator
     ModifiedShapeFunctions::Pointer p_calculator =
-        ShiftedBoundarySplitInternals::GetContinuousShapeFunctionCalculator<TTDim, NumNodes>(
+        LaplacianSplitInternals::GetContinuousShapeFunctionCalculator<TTDim, NumNodes>(
             *this,
-            mNodalDistances);
+            rData.NodalDistances);
 
     // Positive side volume
     p_calculator->ComputePositiveSideShapeFunctionsAndGradientsValues(
-        mPositiveSideN,
-        mPositiveSideDNDX,
-        mPositiveSideWeights,
+        rData.PositiveSideN,
+        rData.PositiveSideDNDX,
+        rData.PositiveSideWeights,
         this->GetIntegrationMethod()); //GeometryData::GI_GAUSS_2
 
     // Negative side volume
     /*p_calculator->ComputeNegativeSideShapeFunctionsAndGradientsValues(
-        mNegativeSideN,
-        mNegativeSideDNDX,
-        mNegativeSideWeights,
+        rData.NegativeSideN,
+        rData.NegativeSideDNDX,
+        rData.NegativeSideWeights,
         this->GetIntegrationMethod());*/
 }
 
@@ -187,20 +173,21 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveSideToSystem(
     MatrixType& rLeftHandSideMatrix,
     VectorType& rRightHandSideVector,
     const ProcessInfo& rCurrentProcessInfo,
-    const GeometryType& rGeometry)
+    const SplitElementData& rData)
 {
+    const auto& r_geom = GetGeometry();
     auto& r_settings = *rCurrentProcessInfo[CONVECTION_DIFFUSION_SETTINGS];
 
     const Variable<double>& r_unknown_var = r_settings.GetUnknownVariable();
     const Variable<double>& r_diffusivity_var = r_settings.GetDiffusionVariable();
     const Variable<double>& r_volume_source_var = r_settings.GetVolumeSourceVariable();
 
-    //resizing and resetting the LHS
+    // Resizing and resetting the LHS
     if(rLeftHandSideMatrix.size1() != NumNodes)
         rLeftHandSideMatrix.resize(NumNodes,NumNodes,false);
     noalias(rLeftHandSideMatrix) = ZeroMatrix(NumNodes,NumNodes);
 
-    //resizing and resetting the RHS
+    // Resizing and resetting the RHS
     if(rRightHandSideVector.size() != NumNodes)
         rRightHandSideVector.resize(NumNodes,false);
     noalias(rRightHandSideVector) = ZeroVector(NumNodes);
@@ -210,26 +197,26 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveSideToSystem(
     Vector nodal_conductivity(NumNodes);
     Vector temp(NumNodes);
     for(std::size_t n = 0; n < NumNodes; ++n) {
-        heat_flux_local[n] = rGeometry[n].FastGetSolutionStepValue(r_volume_source_var);
-        nodal_conductivity[n] = rGeometry[n].FastGetSolutionStepValue(r_diffusivity_var);
-        temp[n] = rGeometry[n].GetSolutionStepValue(r_unknown_var);
+        heat_flux_local[n] = r_geom[n].FastGetSolutionStepValue(r_volume_source_var);
+        nodal_conductivity[n] = r_geom[n].FastGetSolutionStepValue(r_diffusivity_var);
+        temp[n] = r_geom[n].GetSolutionStepValue(r_unknown_var);
     }
 
     // Iterate over the positive side volume integration points 
     // = number of integration points * number of subdivisions on positive side of element
-    const std::size_t number_of_positive_gauss_points = mPositiveSideWeights.size();
+    const std::size_t number_of_positive_gauss_points = rData.PositiveSideWeights.size();
     for (std::size_t g = 0; g < number_of_positive_gauss_points; ++g) {
 
-        const auto& N = row(mPositiveSideN, g); 
-        const auto& DN_DX = mPositiveSideDNDX[g];
-        const double IntToReferenceWeight = mPositiveSideWeights[g]; 
+        const auto& N = row(rData.PositiveSideN, g); 
+        const auto& DN_DX = rData.PositiveSideDNDX[g];
+        const double IntToReferenceWeight = rData.PositiveSideWeights[g]; 
 
         //Calculate the local conductivity
         const double conductivity_gauss = inner_prod(N, nodal_conductivity);
 
         noalias(rLeftHandSideMatrix) += IntToReferenceWeight * conductivity_gauss * prod(DN_DX, trans(DN_DX)); 
 
-        // Calculate the local RHS
+        // Calculate the local RHS (external source)
         const double qgauss = inner_prod(N, heat_flux_local);
 
         noalias(rRightHandSideVector) += IntToReferenceWeight * qgauss * N;
@@ -250,7 +237,7 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveSideToSystem(
 // Helper functions for template specialization
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-namespace ShiftedBoundarySplitInternals {
+namespace LaplacianSplitInternals {
 
 template <>
 ModifiedShapeFunctions::Pointer GetContinuousShapeFunctionCalculator<2, 3>(
@@ -266,6 +253,41 @@ ModifiedShapeFunctions::Pointer GetContinuousShapeFunctionCalculator<3, 4>(
     const Vector& rNodalDistances)
 {
     return ModifiedShapeFunctions::Pointer(new Tetrahedra3D4ModifiedShapeFunctions(rElement.pGetGeometry(), rNodalDistances));
+}
+
+template<std::size_t TTDim>
+void SplitElementData<TTDim>::Initialize(
+    const Element& rElement)
+{
+    const auto& r_geom = rElement.GetGeometry();;
+
+    // Get nodal distances
+    if (NodalDistances.size() != NumNodes) {
+        NodalDistances.resize(NumNodes);
+    }
+    for (std::size_t i = 0; i < NumNodes; ++i) {
+        NodalDistances[i] = r_geom[i].FastGetSolutionStepValue(DISTANCE);
+    }
+
+    // Number and indices of positive and negative distance function values
+    NumPositiveNodes = 0;
+    NumNegativeNodes = 0;
+    PositiveIndices.clear();
+
+    for (std::size_t i = 0; i < NumNodes; ++i){
+        if (NodalDistances[i] > 0.0){
+            NumPositiveNodes++;
+            PositiveIndices.push_back(i);
+        } else {
+            NumNegativeNodes++;
+        }
+    }
+}
+
+template<std::size_t TTDim>
+bool SplitElementData<TTDim>::IsSplit()
+{
+    return (NumPositiveNodes > 0) && (NumNegativeNodes > 0);
 }
 
 }
