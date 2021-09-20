@@ -240,17 +240,17 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveElementSide(
 
         const auto& N = row(rData.PositiveSideN, g); 
         const auto& DN_DX = rData.PositiveSideDNDX[g];
-        const double weight = rData.PositiveSideWeights[g]; 
+        const double weight_gauss = rData.PositiveSideWeights[g]; 
 
         //Calculate the local conductivity
         const double conductivity_gauss = inner_prod(N, nodal_conductivity);
 
-        noalias(rLeftHandSideMatrix) += weight * conductivity_gauss * prod(DN_DX, trans(DN_DX)); 
+        noalias(rLeftHandSideMatrix) += weight_gauss * conductivity_gauss * prod(DN_DX, trans(DN_DX)); 
 
         // Calculate the local RHS (external source)
-        const double qgauss = inner_prod(N, heat_flux_local);
+        const double q_gauss = inner_prod(N, heat_flux_local);
 
-        noalias(rRightHandSideVector) += weight * qgauss * N;
+        noalias(rRightHandSideVector) += weight_gauss * q_gauss * N;
     }
     
     //RHS -= K*temp
@@ -270,18 +270,20 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveBoundaryTerms(
     auto& r_settings = *rCurrentProcessInfo[CONVECTION_DIFFUSION_SETTINGS];
 
     const Variable<double>& r_unknown_var = r_settings.GetUnknownVariable();
-    //const Variable<double>& r_diffusivity_var = r_settings.GetDiffusionVariable();
+    const Variable<double>& r_diffusivity_var = r_settings.GetDiffusionVariable();
     //const Variable<double>& r_volume_source_var = r_settings.GetVolumeSourceVariable();
 
     // Get heat flux, conductivity and temp (RHS = ExtForces - K*temp) nodal vectors
     //Vector heat_flux_local(NumNodes);
-    //Vector nodal_conductivity(NumNodes);
+    Vector nodal_conductivity(NumNodes);
     Vector temp(NumNodes);
     for(std::size_t n = 0; n < NumNodes; ++n) {
         //heat_flux_local[n] = r_geom[n].FastGetSolutionStepValue(r_volume_source_var);
-        //nodal_conductivity[n] = r_geom[n].FastGetSolutionStepValue(r_diffusivity_var);
+        nodal_conductivity[n] = r_geom[n].FastGetSolutionStepValue(r_diffusivity_var);
         temp[n] = r_geom[n].GetSolutionStepValue(r_unknown_var);
     }
+
+    BoundedMatrix<double, NumNodes, NumNodes> aux_LHS = ZeroMatrix(NumNodes, NumNodes);
 
     // Iterate over the positive side volume integration points 
     // = number of integration points * number of subdivisions on positive side of element
@@ -290,31 +292,51 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveBoundaryTerms(
 
         const auto& N = row(rData.PositiveInterfaceN, g); 
         const auto& DN_DX = rData.PositiveInterfaceDNDX[g];
-        const double weight = rData.PositiveInterfaceWeights[g]; 
+        const double weight_gauss = rData.PositiveInterfaceWeights[g]; 
         const auto& unit_normal = rData.PositiveInterfaceUnitNormals[g];
 
         //Calculate the local conductivity
-        //const double conductivity_gauss = inner_prod(N, nodal_conductivity);
+        const double conductivity_gauss = inner_prod(N, nodal_conductivity);
 
-        //const BoundedMatrix<double, NumNodes, TTDim> aux_N_projected = prod(N, trans(unit_normal));        
+        /*
+        // Set the shape functions auxiliar transpose matrix
+        BoundedMatrix<double, NumNodes, TTDim> aux_N = ZeroMatrix(NumNodes, TTDim);
+        for (std::size_t i = 0; i < NumNodes; ++i) {
+            for (std::size_t d = 0; d < TTDim; ++d) {
+                aux_N(i, d) = N(i);
+            }
+        }
 
-        //noalias(aux_LHS) += weight * prod(aux_N_projected, trans(DN_DX)); 
+        // Set interface normal projection matrix
+        BoundedMatrix<double, TTDim, TTDim> normal_projection_matrix = ZeroMatrix(TTDim, TTDim);
+        for (std::size_t d = 0; d < TTDim; ++d) {
+            for (std::size_t e = 0; e < TTDim; ++e) {
+                normal_projection_matrix(d, e) = unit_normal(d) * unit_normal (e);
+            }
+        }
+
+        const BoundedMatrix<double, NumNodes, TTDim> aux_N_projected = prod(aux_N, normal_projection_matrix);        
+
+        noalias(aux_LHS) += weight_gauss * conductivity_gauss * prod(aux_N_projected, trans(DN_DX)); 
+        */
 
         // ALTERNATIVE
         for (std::size_t i = 0; i < NumNodes; ++i) {
             for (std::size_t j = 0; j < NumNodes; ++j) {
                 for (std::size_t d = 0; d < TTDim; ++d) {
-                    const double aux = weight * N(i) * unit_normal(d) * DN_DX(j,d);
-                    rLeftHandSideMatrix(i, j) += aux;
-                    rRightHandSideVector(i) -= aux * temp(j);
+                    const double aux = weight_gauss * N(i) * unit_normal(d) * DN_DX(j,d); //* conductivity_gauss
+                    rLeftHandSideMatrix(i, j) -= aux;
+                    rRightHandSideVector(i) += aux * temp(j);
                 }
             }
         }
     }
     
-    //noalias(rLeftHandSideMatrix) += aux_LHS;
+    /*
+    noalias(rLeftHandSideMatrix) -= aux_LHS;
     //RHS -= K*temp
-    //noalias(rRightHandSideVector) -= prod(aux_LHS,temp);  
+    noalias(rRightHandSideVector) += prod(aux_LHS, temp);  
+    */
 
     // Iterate over the negative side volume integration points
 }
