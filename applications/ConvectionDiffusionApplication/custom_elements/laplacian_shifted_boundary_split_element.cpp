@@ -21,6 +21,7 @@
 #include "includes/variables.h"
 #include "includes/convection_diffusion_settings.h"
 #include "utilities/geometry_utilities.h"
+#include "utilities/element_size_calculator.h"
 
 // Application includes
 #include "custom_elements/laplacian_shifted_boundary_split_element.h"
@@ -94,11 +95,21 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::CalculateLocalSystem(
         // Get nodal distances and set splitting and shape functions
         InitializeGeometryData(data);
 
+        // Resizing and resetting the LHS
+        if(rLeftHandSideMatrix.size1() != NumNodes)
+            rLeftHandSideMatrix.resize(NumNodes,NumNodes,false);
+        noalias(rLeftHandSideMatrix) = ZeroMatrix(NumNodes,NumNodes);
+
+        // Resizing and resetting the RHS
+        if(rRightHandSideVector.size() != NumNodes)
+            rRightHandSideVector.resize(NumNodes,false);
+        noalias(rRightHandSideVector) = ZeroVector(NumNodes);
+
         // Calculate and add local system for the positive side of the element
-        AddPositiveSideToSystem(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo, data);
+        AddPositiveElementSide(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo, data);
         
         // Calculate and add boundary terms
-        //AddBoundaryTerms(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo, data;
+        AddPositiveBoundaryTerms(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo, data);
 
         //Calculate and add Nitsche terms for weak imposition of boundary condition
         //AddNormalPenaltyContribution()
@@ -166,10 +177,40 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::InitializeGeometryData(
         rData.NegativeSideDNDX,
         rData.NegativeSideWeights,
         this->GetIntegrationMethod());*/
+
+    // Positive side interface
+    p_calculator->ComputeInterfacePositiveSideShapeFunctionsAndGradientsValues(
+        rData.PositiveInterfaceN,
+        rData.PositiveInterfaceDNDX,
+        rData.PositiveInterfaceWeights,
+        this->GetIntegrationMethod());
+
+    // Positive side interface normals
+    p_calculator->ComputePositiveSideInterfaceAreaNormals(
+        rData.PositiveInterfaceUnitNormals,
+        this->GetIntegrationMethod());
+
+    // Normalize the normals
+    // Note: we calculate h here (and we don't use the value in rData.ElementSize)
+    // because rData.ElementSize might still be uninitialized: some data classes define it at the Gauss point.
+    double h = ElementSizeCalculator<TTDim,NumNodes>::MinimumElementSize(this->GetGeometry());
+    const double tolerance = std::pow(1e-3 * h, TTDim-1);
+    this->NormalizeInterfaceNormals(rData.PositiveInterfaceUnitNormals, tolerance);
 }
 
 template<std::size_t TTDim>
-void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveSideToSystem(
+void LaplacianShiftedBoundarySplitElement<TTDim>::NormalizeInterfaceNormals(
+    typename SplitElementData::InterfaceNormalsType& rNormals,
+    double Tolerance) const
+{
+    for (std::size_t i = 0; i < rNormals.size(); ++i) {
+        double norm = norm_2(rNormals[i]);
+        rNormals[i] /= std::max(norm,Tolerance);
+    }
+}
+
+template<std::size_t TTDim>
+void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveElementSide(
     MatrixType& rLeftHandSideMatrix,
     VectorType& rRightHandSideVector,
     const ProcessInfo& rCurrentProcessInfo,
@@ -181,16 +222,6 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveSideToSystem(
     const Variable<double>& r_unknown_var = r_settings.GetUnknownVariable();
     const Variable<double>& r_diffusivity_var = r_settings.GetDiffusionVariable();
     const Variable<double>& r_volume_source_var = r_settings.GetVolumeSourceVariable();
-
-    // Resizing and resetting the LHS
-    if(rLeftHandSideMatrix.size1() != NumNodes)
-        rLeftHandSideMatrix.resize(NumNodes,NumNodes,false);
-    noalias(rLeftHandSideMatrix) = ZeroMatrix(NumNodes,NumNodes);
-
-    // Resizing and resetting the RHS
-    if(rRightHandSideVector.size() != NumNodes)
-        rRightHandSideVector.resize(NumNodes,false);
-    noalias(rRightHandSideVector) = ZeroVector(NumNodes);
 
     // Get heat flux, conductivity and temp (RHS = ExtForces - K*temp) nodal vectors
     Vector heat_flux_local(NumNodes);
@@ -209,21 +240,81 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveSideToSystem(
 
         const auto& N = row(rData.PositiveSideN, g); 
         const auto& DN_DX = rData.PositiveSideDNDX[g];
-        const double IntToReferenceWeight = rData.PositiveSideWeights[g]; 
+        const double weight = rData.PositiveSideWeights[g]; 
 
         //Calculate the local conductivity
         const double conductivity_gauss = inner_prod(N, nodal_conductivity);
 
-        noalias(rLeftHandSideMatrix) += IntToReferenceWeight * conductivity_gauss * prod(DN_DX, trans(DN_DX)); 
+        noalias(rLeftHandSideMatrix) += weight * conductivity_gauss * prod(DN_DX, trans(DN_DX)); 
 
         // Calculate the local RHS (external source)
         const double qgauss = inner_prod(N, heat_flux_local);
 
-        noalias(rRightHandSideVector) += IntToReferenceWeight * qgauss * N;
+        noalias(rRightHandSideVector) += weight * qgauss * N;
     }
     
     //RHS -= K*temp
     noalias(rRightHandSideVector) -= prod(rLeftHandSideMatrix,temp);  
+
+    // Iterate over the negative side volume integration points
+}
+
+template<std::size_t TTDim>
+void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveBoundaryTerms(
+    MatrixType& rLeftHandSideMatrix,
+    VectorType& rRightHandSideVector,
+    const ProcessInfo& rCurrentProcessInfo,
+    const SplitElementData& rData)
+{
+    const auto& r_geom = GetGeometry();
+    auto& r_settings = *rCurrentProcessInfo[CONVECTION_DIFFUSION_SETTINGS];
+
+    const Variable<double>& r_unknown_var = r_settings.GetUnknownVariable();
+    //const Variable<double>& r_diffusivity_var = r_settings.GetDiffusionVariable();
+    //const Variable<double>& r_volume_source_var = r_settings.GetVolumeSourceVariable();
+
+    // Get heat flux, conductivity and temp (RHS = ExtForces - K*temp) nodal vectors
+    //Vector heat_flux_local(NumNodes);
+    //Vector nodal_conductivity(NumNodes);
+    Vector temp(NumNodes);
+    for(std::size_t n = 0; n < NumNodes; ++n) {
+        //heat_flux_local[n] = r_geom[n].FastGetSolutionStepValue(r_volume_source_var);
+        //nodal_conductivity[n] = r_geom[n].FastGetSolutionStepValue(r_diffusivity_var);
+        temp[n] = r_geom[n].GetSolutionStepValue(r_unknown_var);
+    }
+
+    // Iterate over the positive side volume integration points 
+    // = number of integration points * number of subdivisions on positive side of element
+    const std::size_t number_of_positive_gauss_points = rData.PositiveInterfaceWeights.size();
+    for (std::size_t g = 0; g < number_of_positive_gauss_points; ++g) {
+
+        const auto& N = row(rData.PositiveInterfaceN, g); 
+        const auto& DN_DX = rData.PositiveInterfaceDNDX[g];
+        const double weight = rData.PositiveInterfaceWeights[g]; 
+        const auto& unit_normal = rData.PositiveInterfaceUnitNormals[g];
+
+        //Calculate the local conductivity
+        //const double conductivity_gauss = inner_prod(N, nodal_conductivity);
+
+        //const BoundedMatrix<double, NumNodes, TTDim> aux_N_projected = prod(N, trans(unit_normal));        
+
+        //noalias(aux_LHS) += weight * prod(aux_N_projected, trans(DN_DX)); 
+
+        // ALTERNATIVE
+        for (std::size_t i = 0; i < NumNodes; ++i) {
+            for (std::size_t j = 0; j < NumNodes; ++j) {
+                for (std::size_t d = 0; d < TTDim; ++d) {
+                    const double aux = weight * N(i) * unit_normal(d) * DN_DX(j,d);
+                    rLeftHandSideMatrix(i, j) += aux;
+                    rRightHandSideVector(i) -= aux * temp(j);
+                }
+            }
+        }
+    }
+    
+    //noalias(rLeftHandSideMatrix) += aux_LHS;
+    //RHS -= K*temp
+    //noalias(rRightHandSideVector) -= prod(aux_LHS,temp);  
 
     // Iterate over the negative side volume integration points
 }

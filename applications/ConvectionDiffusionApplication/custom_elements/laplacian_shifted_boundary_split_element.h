@@ -170,11 +170,32 @@ protected:
         SplitElementData& rData);
 
     /**
-     * @brief Calculation of local system for intersected elements
-     * This method calculates the local system of an intersected element by performing a volume integral 
-     * of its positive side only.
+     * @brief For an intersected element, normalize the interface normals
+     * This method normalizes the interface normals for an intersected element.
+     * @param rNormals interface normals container
+     * @param Tolerance tolerance to avoid division by 0 when normalizing
      */
-    void AddPositiveSideToSystem(
+    void NormalizeInterfaceNormals(
+        typename SplitElementData::InterfaceNormalsType& rNormals,
+        double Tolerance) const;
+
+    /**
+     * @brief Calculation of positive side for intersected elements
+     * This method calculates a volume integral of the positive side
+     * to the local system of an intersected element
+     */
+    void AddPositiveElementSide(
+        MatrixType& rLeftHandSideMatrix,
+        VectorType& rRightHandSideVector,
+        const ProcessInfo& rCurrentProcessInfo,
+        const SplitElementData& rData);
+
+    /**
+     * @brief Calculation of the boundary terms for intersected elements
+     * This method calculates the boundary terms on the positive side of an intersected element
+     * by performing an interface integral.
+     */
+    void AddPositiveBoundaryTerms(
         MatrixType& rLeftHandSideMatrix,
         VectorType& rRightHandSideVector,
         const ProcessInfo& rCurrentProcessInfo,
