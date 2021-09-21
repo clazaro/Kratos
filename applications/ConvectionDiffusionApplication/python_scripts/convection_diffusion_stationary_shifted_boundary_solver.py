@@ -58,6 +58,7 @@ class ConvectionDiffusionStationaryShiftedBoundarySolver(convection_diffusion_st
             KratosMultiphysics.VariableUtils().AddDof(KratosMultiphysics.SCALAR_LAGRANGE_MULTIPLIER, self.main_model_part)
 
     def Initialize(self):
+
         # # Correct the level set
         # #TODO: Use the FluidDynamicsApplication process
         # #FIXME: USE THIS FOR THE ZIG-ZAG PLATE TESTS
@@ -79,35 +80,46 @@ class ConvectionDiffusionStationaryShiftedBoundarySolver(convection_diffusion_st
             if abs(dist) < tol:
                 node.SetSolutionStepValue(KratosMultiphysics.DISTANCE, 0, tol)
 
-        # Calculate the required neighbours
-        nodal_neighbours_process = KratosMultiphysics.FindGlobalNodalNeighboursProcess(self.main_model_part)
-        nodal_neighbours_process.Execute()
-        avg_num_elements = 10
-        dimensions = self.main_model_part.ProcessInfo.GetValue(KratosMultiphysics.DOMAIN_SIZE)
-        elemental_neighbours_process = KratosMultiphysics.FindElementalNeighboursProcess(self.main_model_part, dimensions, avg_num_elements)
-        elemental_neighbours_process.Execute()
+        # Deactivate elements in negative distance region
+        for element in self.GetComputingModelPart().Elements:
+            n_pos = 0
+            for node in element.GetGeometry():
+                if node.GetSolutionStepValue(KratosMultiphysics.DISTANCE) > 0.0:
+                    n_pos += 1
+            if n_pos == 0:
+                element.Set(KratosMultiphysics.ACTIVE, False)
+                for node in element.GetGeometry():
+                    node.Set(KratosMultiphysics.ACTIVE, False)
 
-        # Create the boundary elements and MLS basis
-        settings = KratosMultiphysics.Parameters("""{}""")
-        settings.AddEmptyValue("model_part_name").SetString(self.main_model_part.Name)
-        settings.AddEmptyValue("boundary_sub_model_part_name").SetString("shifted_boundary")
-        settings.AddEmptyValue("mls_extension_operator_order").SetInt(self.settings["mls_extension_operator_order"].GetInt())
-        settings.AddEmptyValue("mls_conforming_basis").SetBool(self.settings["mls_conforming_basis"].GetBool())
-        if self.settings["lagrange_multipliers_imposition"].GetBool():
-            sbm_interface_condition_name = "LaplacianShiftedBoundaryLagrangeMultipliersCondition"
-        else:
-            sbm_interface_condition_name = "LaplacianShiftedBoundaryCondition"
-        settings.AddEmptyValue("sbm_interface_condition_name").SetString(sbm_interface_condition_name)
-        settings.AddEmptyValue("use_boundary_splitting").SetBool(
-            self.settings["element_replace_settings"]["element_name"].GetString()[:-4] == "LaplacianShiftedBoundarySplitElement")
-        sbm_interface_process = ConvectionDiffusionApplication.ShiftedBoundaryMeshlessInterfaceProcess(self.model, settings)
-        sbm_interface_process.Execute()
+        # # Calculate the required neighbours
+        # nodal_neighbours_process = KratosMultiphysics.FindGlobalNodalNeighboursProcess(self.main_model_part)
+        # nodal_neighbours_process.Execute()
+        # avg_num_elements = 10
+        # dimensions = self.main_model_part.ProcessInfo.GetValue(KratosMultiphysics.DOMAIN_SIZE)
+        # elemental_neighbours_process = KratosMultiphysics.FindElementalNeighboursProcess(self.main_model_part, dimensions, avg_num_elements)
+        # elemental_neighbours_process.Execute()
 
-        # Merge the SBM boundary model part with the computational one
-        KratosMultiphysics.SubModelPartConditionsBooleanOperationUtility.Union(
-            self.GetComputingModelPart(),
-            self.model.GetModelPart(self.main_model_part.Name + "." + "shifted_boundary"),
-            self.GetComputingModelPart())
+        # # Create the boundary elements and MLS basis
+        # settings = KratosMultiphysics.Parameters("""{}""")
+        # settings.AddEmptyValue("model_part_name").SetString(self.main_model_part.Name)
+        # settings.AddEmptyValue("boundary_sub_model_part_name").SetString("shifted_boundary")
+        # settings.AddEmptyValue("mls_extension_operator_order").SetInt(self.settings["mls_extension_operator_order"].GetInt())
+        # settings.AddEmptyValue("mls_conforming_basis").SetBool(self.settings["mls_conforming_basis"].GetBool())
+        # if self.settings["lagrange_multipliers_imposition"].GetBool():
+        #     sbm_interface_condition_name = "LaplacianShiftedBoundaryLagrangeMultipliersCondition"
+        # else:
+        #     sbm_interface_condition_name = "LaplacianShiftedBoundaryCondition"
+        # settings.AddEmptyValue("sbm_interface_condition_name").SetString(sbm_interface_condition_name)
+        # settings.AddEmptyValue("use_boundary_splitting").SetBool(
+        #     self.settings["element_replace_settings"]["element_name"].GetString()[:-4] == "LaplacianShiftedBoundarySplitElement")
+        # sbm_interface_process = ConvectionDiffusionApplication.ShiftedBoundaryMeshlessInterfaceProcess(self.model, settings)
+        # sbm_interface_process.Execute()
+
+        # # Merge the SBM boundary model part with the computational one
+        # KratosMultiphysics.SubModelPartConditionsBooleanOperationUtility.Union(
+        #     self.GetComputingModelPart(),
+        #     self.model.GetModelPart(self.main_model_part.Name + "." + "shifted_boundary"),
+        #     self.GetComputingModelPart())
 
         # Initialize base solver strategy
         super().Initialize()

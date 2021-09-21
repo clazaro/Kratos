@@ -108,8 +108,8 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::CalculateLocalSystem(
         // Calculate and add local system for the positive side of the element
         AddPositiveElementSide(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo, data);
         
-        // Calculate and add boundary terms
-        AddPositiveBoundaryTerms(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo, data);
+        // Calculate and add interface terms (flux and Nitsche imposition of boundary condition)
+        AddPositiveInterfaceTerms(rLeftHandSideMatrix, rRightHandSideVector, rCurrentProcessInfo, data);
 
         //Calculate and add Nitsche terms for weak imposition of boundary condition
         //AddNormalPenaltyContribution()
@@ -193,7 +193,7 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::InitializeGeometryData(
     // Normalize the normals
     // Note: we calculate h here (and we don't use the value in rData.ElementSize)
     // because rData.ElementSize might still be uninitialized: some data classes define it at the Gauss point.
-    double h = ElementSizeCalculator<TTDim,NumNodes>::MinimumElementSize(this->GetGeometry());
+    const double h = ElementSizeCalculator<TTDim,NumNodes>::MinimumElementSize(this->GetGeometry());
     const double tolerance = std::pow(1e-3 * h, TTDim-1);
     this->NormalizeInterfaceNormals(rData.PositiveInterfaceUnitNormals, tolerance);
 }
@@ -260,7 +260,7 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveElementSide(
 }
 
 template<std::size_t TTDim>
-void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveBoundaryTerms(
+void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveInterfaceTerms(
     MatrixType& rLeftHandSideMatrix,
     VectorType& rRightHandSideVector,
     const ProcessInfo& rCurrentProcessInfo,
@@ -271,22 +271,24 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveBoundaryTerms(
 
     const Variable<double>& r_unknown_var = r_settings.GetUnknownVariable();
     const Variable<double>& r_diffusivity_var = r_settings.GetDiffusionVariable();
-    //const Variable<double>& r_volume_source_var = r_settings.GetVolumeSourceVariable();
 
     // Get heat flux, conductivity and temp (RHS = ExtForces - K*temp) nodal vectors
     //Vector heat_flux_local(NumNodes);
     Vector nodal_conductivity(NumNodes);
     Vector temp(NumNodes);
     for(std::size_t n = 0; n < NumNodes; ++n) {
-        //heat_flux_local[n] = r_geom[n].FastGetSolutionStepValue(r_volume_source_var);
         nodal_conductivity[n] = r_geom[n].FastGetSolutionStepValue(r_diffusivity_var);
         temp[n] = r_geom[n].GetSolutionStepValue(r_unknown_var);
     }
 
+    // Nitsche penalty // TODO: get user-defined value
+    const double gamma = 1e0;
+    // Measure of element size
+    const double h = ElementSizeCalculator<TTDim,NumNodes>::MinimumElementSize(r_geom);
+
     BoundedMatrix<double, NumNodes, NumNodes> aux_LHS = ZeroMatrix(NumNodes, NumNodes);
 
-    // Iterate over the positive side volume integration points 
-    // = number of integration points * number of subdivisions on positive side of element
+    // Iterate over the positive side interface integration points 
     const std::size_t number_of_positive_gauss_points = rData.PositiveInterfaceWeights.size();
     for (std::size_t g = 0; g < number_of_positive_gauss_points; ++g) {
 
@@ -298,47 +300,45 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveBoundaryTerms(
         //Calculate the local conductivity
         const double conductivity_gauss = inner_prod(N, nodal_conductivity);
 
-        /*
-        // Set the shape functions auxiliar transpose matrix
-        BoundedMatrix<double, NumNodes, TTDim> aux_N = ZeroMatrix(NumNodes, TTDim);
+        // Gauss pt coordinates
+        array_1d<double,3> xg_coords = ZeroVector(3);
         for (std::size_t i = 0; i < NumNodes; ++i) {
-            for (std::size_t d = 0; d < TTDim; ++d) {
-                aux_N(i, d) = N(i);
-            }
+            noalias(xg_coords) += N(i) * r_geom[i].Coordinates();
         }
+        // Dirichlet boundary condition // TODO: get user-defined boundary condition
+        const double temp_bc = std::pow(xg_coords[0],2) + std::pow(xg_coords[1],2);
 
-        // Set interface normal projection matrix
-        BoundedMatrix<double, TTDim, TTDim> normal_projection_matrix = ZeroMatrix(TTDim, TTDim);
-        for (std::size_t d = 0; d < TTDim; ++d) {
-            for (std::size_t e = 0; e < TTDim; ++e) {
-                normal_projection_matrix(d, e) = unit_normal(d) * unit_normal (e);
-            }
-        }
-
-        const BoundedMatrix<double, NumNodes, TTDim> aux_N_projected = prod(aux_N, normal_projection_matrix);        
-
-        noalias(aux_LHS) += weight_gauss * conductivity_gauss * prod(aux_N_projected, trans(DN_DX)); 
-        */
-
-        // ALTERNATIVE
+        // Add interface contributions
         for (std::size_t i = 0; i < NumNodes; ++i) {
+
+            // Calculate contribution of Nitsche boundary condition - part 1
+            const double aux_bc_1 = weight_gauss * conductivity_gauss * gamma / h * N(i);
+
             for (std::size_t j = 0; j < NumNodes; ++j) {
                 for (std::size_t d = 0; d < TTDim; ++d) {
-                    const double aux = weight_gauss * conductivity_gauss * N(i) * unit_normal(d) * DN_DX(j,d);
-                    rLeftHandSideMatrix(i, j) -= aux;
-                    rRightHandSideVector(i) += aux * temp(j);
+
+                    // Calculate contribution of interface flux
+                    const double aux_flux = weight_gauss * conductivity_gauss * N(i) * unit_normal(d) * DN_DX(j,d);
+
+                    // Add contribution of interface flux
+                    rLeftHandSideMatrix(i, j) -= aux_flux;
+                    rRightHandSideVector(i) += aux_flux * temp(j);
+
+                    // Calculate contribution of Nitsche boundary condition - part 2
+                    const double aux_bc_2 = weight_gauss * conductivity_gauss * DN_DX(i,d) * unit_normal(d);
+
+                    // Add contribution of Nitsche boundary condition - part 2 - solution boundary value
+                    //rLeftHandSideMatrix(i, j) -= aux_bc_2 * N(j) ;
+                    //rRightHandSideVector(i) += aux_bc_2 * N(j) * temp(j);
                 }
+                // Add contribution of Nitsche boundary condition - part 1 - solution boundary value
+                rLeftHandSideMatrix(i, j) += aux_bc_1 * N(j);
+                rRightHandSideVector(i) -= aux_bc_1 * N(j) * temp(j);
             }
+            // Add contribution of Nitsche boundary condition - part 1 - prescribed boundary value
+            rRightHandSideVector(i) += aux_bc_1 * temp_bc ;
         }
     }
-    
-    /*
-    noalias(rLeftHandSideMatrix) -= aux_LHS;
-    //RHS -= K*temp
-    noalias(rRightHandSideVector) += prod(aux_LHS, temp);  
-    */
-
-    // Iterate over the negative side volume integration points
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

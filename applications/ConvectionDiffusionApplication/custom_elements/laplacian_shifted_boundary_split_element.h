@@ -195,7 +195,7 @@ protected:
      * This method calculates the boundary terms on the positive side of an intersected element
      * by performing an interface integral.
      */
-    void AddPositiveBoundaryTerms(
+    void AddPositiveInterfaceTerms(
         MatrixType& rLeftHandSideMatrix,
         VectorType& rRightHandSideVector,
         const ProcessInfo& rCurrentProcessInfo,
