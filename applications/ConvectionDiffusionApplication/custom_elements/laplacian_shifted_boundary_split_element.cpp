@@ -324,7 +324,7 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveBoundaryTerms(
         for (std::size_t i = 0; i < NumNodes; ++i) {
             for (std::size_t j = 0; j < NumNodes; ++j) {
                 for (std::size_t d = 0; d < TTDim; ++d) {
-                    const double aux = weight_gauss * N(i) * unit_normal(d) * DN_DX(j,d); //* conductivity_gauss
+                    const double aux = weight_gauss * conductivity_gauss * N(i) * unit_normal(d) * DN_DX(j,d);
                     rLeftHandSideMatrix(i, j) -= aux;
                     rRightHandSideVector(i) += aux * temp(j);
                 }
