@@ -191,11 +191,22 @@ protected:
         const SplitElementData& rData);
 
     /**
-     * @brief Calculation of the boundary terms for intersected elements
-     * This method calculates the boundary terms on the positive side of an intersected element
+     * @brief Calculation of the interface terms for intersected elements
+     * This method calculates the interface terms on the positive side of an intersected element
      * by performing an interface integral.
      */
     void AddPositiveInterfaceTerms(
+        MatrixType& rLeftHandSideMatrix,
+        VectorType& rRightHandSideVector,
+        const ProcessInfo& rCurrentProcessInfo,
+        const SplitElementData& rData);
+
+    /**
+     * @brief Calculation of the Nitsche boundary terms for intersected elements
+     * This method calculates the Nitsche boundary terms on the positive side of an intersected element
+     * by performing interface integrals for the weak imposition of a Dirichlet boundary condition.
+     */
+    void AddNitscheBoundaryTerms(
         MatrixType& rLeftHandSideMatrix,
         VectorType& rRightHandSideVector,
         const ProcessInfo& rCurrentProcessInfo,
