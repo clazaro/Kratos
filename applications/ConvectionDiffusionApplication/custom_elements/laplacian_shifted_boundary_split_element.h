@@ -6,7 +6,8 @@
 //  License:         BSD License
 //                   Kratos default license: kratos/license.txt
 //
-//  Main authors:    Ruben Zorrilla, Franziska Wahl
+//  Main authors:    Ruben Zorrilla
+//                   Franziska Wahl
 //
 
 #ifndef KRATOS_LAPLACIAN_SHIFTED_BOUNDARY_SPLIT_ELEMENT_H_INCLUDED

@@ -6,7 +6,8 @@
 //  License:         BSD License
 //                   Kratos default license: kratos/license.txt
 //
-//  Main authors:    Ruben Zorrilla, Franziska Wahl
+//  Main authors:    Ruben Zorrilla
+//                   Franziska Wahl
 //
 
 // System includes
@@ -25,6 +26,7 @@
 
 // Application includes
 #include "custom_elements/laplacian_shifted_boundary_split_element.h"
+#include "convection_diffusion_application_variables.h"
 
 #include "modified_shape_functions/triangle_2d_3_modified_shape_functions.h"
 #include "modified_shape_functions/tetrahedra_3d_4_modified_shape_functions.h"
@@ -331,8 +333,8 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddNitscheBoundaryTerms(
         temp[n] = r_geom[n].GetSolutionStepValue(r_unknown_var);
     }
 
-    // Nitsche penalty // TODO: get user-defined value
-    const double gamma = 1e0;  //rCurrentProcessInfo[PENALTY_DIRICHLET];  ??
+    // Nitsche penalty
+    const double gamma = rCurrentProcessInfo[PENALTY_DIRICHLET]; 
     // Measure of element size
     const double h = ElementSizeCalculator<TTDim,NumNodes>::MinimumElementSize(r_geom);
 
