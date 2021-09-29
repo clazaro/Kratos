@@ -315,14 +315,6 @@ private:
                         rExtensionOperatorMap.insert(ext_op_key_data);
                     }
                 }
-
-                // Make the split element and its nodes ACTIVE to assemble it
-                // TODO: ?? if (mUseBoundarySplitting) {
-                rElement.Set(ACTIVE, true);
-                for (auto& rNode : r_geom) {
-                    rNode.Set(ACTIVE, true);
-                }
-                // }
             }
         }
 
@@ -461,22 +453,21 @@ private:
             }
         }*/
         
-
-        // // Make BOUNDARY elements and their nodes ACTIVE if they are split for volume integration
-        // if (mUseBoundarySplitting) {
-        //     for (auto& rElement : mpModelPart->Elements()) {
-        //         // Check if the element is split
-        //         const auto& r_geom = rElement.GetGeometry();
-        //         if (IsSplit(r_geom)) {
-        //             // Mark the boundary element as ACTIVE to assemble it
-        //             rElement.Set(ACTIVE, true);
-        //             // Mark the boundary element's nodes as ACTIVE
-        //             for (auto& rNode : r_geom) {
-        //                 rNode.Set(ACTIVE, true);
-        //             }
-        //         }
-        //     }
-        // }
+        // Make BOUNDARY elements and their nodes ACTIVE if they are split for volume integration
+        if (mUseBoundarySplitting) {
+            for (auto& rElement : mpModelPart->Elements()) {
+                // Check if the element is split
+                const auto& r_geom = rElement.GetGeometry();
+                if (IsSplit(r_geom)) {
+                    // Mark the boundary element as ACTIVE to assemble it
+                    rElement.Set(ACTIVE, true);
+                    // Mark the boundary element's nodes as ACTIVE
+                    for (auto& rNode : r_geom) {
+                        rNode.Set(ACTIVE, true);
+                    }
+                }
+            }
+        }
     }
 
     void CalculateNonConformingExtensionBasis()
@@ -570,14 +561,6 @@ private:
                     //p_cond->SetValue(BDF_COEFFICIENTS, N_container);
                     //p_cond->SetValue(LOCAL_AXES_MATRIX, DN_DX_container);
                 }
-
-                // TODO: Make the split element and its nodes ACTIVE to assemble it
-                if (mUseBoundarySplitting) {
-                rElement.Set(ACTIVE, true);
-                for (auto& rNode : r_geom) {
-                    rNode.Set(ACTIVE, true);
-                }
-                // }
             }
         }*/
 
