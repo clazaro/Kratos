@@ -300,7 +300,7 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddPositiveInterfaceTerms(
             for (std::size_t j = 0; j < NumNodes; ++j) {
                 for (std::size_t d = 0; d < TTDim; ++d) {
 
-                    // Calculate contribution of interface flux
+                    // Calculate contribution of interface flux - TODO: correct with conductivity?
                     const double aux_flux = weight_gauss * conductivity_gauss * N(i) * unit_normal(d) * DN_DX(j,d);
 
                     // Add contribution of interface flux
@@ -333,7 +333,7 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddNitscheBoundaryTerms(
         temp[n] = r_geom[n].GetSolutionStepValue(r_unknown_var);
     }
 
-    // Nitsche penalty
+    // Nitsche penalty - TODO: correct variable?
     const double gamma = rCurrentProcessInfo[PENALTY_DIRICHLET]; 
     // Measure of element size
     const double h = ElementSizeCalculator<TTDim,NumNodes>::MinimumElementSize(r_geom);
@@ -369,12 +369,12 @@ void LaplacianShiftedBoundarySplitElement<TTDim>::AddNitscheBoundaryTerms(
             } 
         }
 
-        // Add Nitsche contributions
+        // Add Nitsche contributions - TODO: correct with conductivity?
         for (std::size_t i = 0; i < NumNodes; ++i) {
 
             // Calculate contribution of Nitsche boundary condition - part 1
             const double aux_bc_1 = weight_gauss * conductivity_gauss * gamma / h * N(i);
-            // Calculate contribution of Nitsche boundary condition - part 2 - stabilization
+            // Calculate contribution of Nitsche boundary condition - part 2 (stabilization)
             const double aux_bc_2 = weight_gauss * conductivity_gauss * DN_DX_normal(i);
 
             for (std::size_t j = 0; j < NumNodes; ++j) {

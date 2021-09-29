@@ -87,11 +87,12 @@ class ConvectionDiffusionStationaryShiftedBoundarySolver(convection_diffusion_st
         extension_constraint_process = ConvectionDiffusionApplication.SplitExtensionConstraintProcess(self.model, settings)
         extension_constraint_process.Execute()
 
+        # TODO: merge
         # Merge the SBM boundary model part with the computational one
-        KratosMultiphysics.SubModelPartConditionsBooleanOperationUtility.Union(
-            self.GetComputingModelPart(),
-            self.model.GetModelPart(self.main_model_part.Name + "." + "split_boundary"),
-            self.GetComputingModelPart())
+        # KratosMultiphysics.SubModelPartConditionsBooleanOperationUtility.Union(
+        #     self.GetComputingModelPart(),
+        #     self.model.GetModelPart(self.main_model_part.Name + "." + "split_boundary"),
+        #     self.GetComputingModelPart())
 
         # Initialize base solver strategy
         super().Initialize()

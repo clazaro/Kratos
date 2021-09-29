@@ -310,7 +310,7 @@ public:
     static constexpr std::size_t NumNodes = TDim + 1;
 
     typedef GeometryData::ShapeFunctionsGradientsType ShapeFunctionsGradientsType;
-    typedef std::vector< Vector > InterfaceNormalsType;
+    typedef std::vector<array_1d<double,3>> InterfaceNormalsType;
     typedef array_1d<double,NumNodes> NodalScalarData;
 
     ///@}

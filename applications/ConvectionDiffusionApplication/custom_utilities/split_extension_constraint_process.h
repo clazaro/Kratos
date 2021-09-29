@@ -104,14 +104,14 @@ public:
         const std::string boundary_sub_model_part_name = ThisParameters["boundary_sub_model_part_name"].GetString();
         mpModelPart = &rModel.GetModelPart(model_part_name);
         //mpCompModelPart = &rModel.GetCompModelPart();
-        if (mpModelPart->HasSubModelPart(boundary_sub_model_part_name)) {
+        /*if (mpModelPart->HasSubModelPart(boundary_sub_model_part_name)) {
             mpBoundarySubModelPart = &(mpModelPart->GetSubModelPart(boundary_sub_model_part_name));
             KRATOS_WARNING_IF("ShiftedBoundaryMeshlessInferfaceProcess", mpBoundarySubModelPart->NumberOfNodes() != 0) << "Provided SBM model part has nodes." << std::endl;
             KRATOS_WARNING_IF("ShiftedBoundaryMeshlessInferfaceProcess", mpBoundarySubModelPart->NumberOfElements() != 0) << "Provided SBM model part has elements." << std::endl;
             KRATOS_WARNING_IF("ShiftedBoundaryMeshlessInferfaceProcess", mpBoundarySubModelPart->NumberOfConditions() != 0) << "Provided SBM model part has conditions." << std::endl;
         } else {
             mpBoundarySubModelPart = &(mpModelPart->CreateSubModelPart(boundary_sub_model_part_name));
-        }
+        }*/
 
         // Set the order of the MLS extension operator used in the MLS shape functions utility
         mMLSExtensionOperatorOrder = ThisParameters["mls_extension_operator_order"].GetInt();
@@ -137,13 +137,19 @@ public:
 
     void Execute() override
     {
+        // Declare extension operator map for negative nodes of split elements
+        NodesCloudMapType ext_op_map;
+
         if (mMLSConformingBasis) {
-            CalculateConformingExtensionBasis();
+            // Calculate the conforming extension basis 
+            CalculateConformingExtensionBasis(ext_op_map);
         } else {
             CalculateNonConformingExtensionBasis();
         }
 
-        ApplyExtensionConstraints();
+        // Apply extension constraints to negative nodes of split elements
+        ApplyExtensionConstraints(ext_op_map);
+
     }
 
     const Parameters GetDefaultParameters() const override
@@ -253,12 +259,11 @@ private:
     ///@name Private Operations
     ///@{
 
-    void CalculateConformingExtensionBasis()
+    void CalculateConformingExtensionBasis(NodesCloudMapType& rExtensionOperatorMap)
     {
         // Set the required interface flags
         SetInterfaceFlags();
 
-        /*
         // Set the modified shape functions factory
         // Note that unique geometry in the mesh is assumed
         const auto& r_begin_geom = mpModelPart->ElementsBegin()->GetGeometry();
@@ -269,21 +274,23 @@ private:
 
         // Get the element size calculation function
         // Note that unique geometry in the mesh is assumed
-        auto p_element_size_func = GetElementSizeFunction(r_begin_geom);
+        //auto p_element_size_func = GetElementSizeFunction(r_begin_geom);
 
         // Get max condition id
-        std::size_t max_cond_id = block_for_each<MaxReduction<std::size_t>>(mpModelPart->Conditions(), [](const Condition& rCondition){return rCondition.Id();});
+        //std::size_t max_cond_id = block_for_each<MaxReduction<std::size_t>>(mpModelPart->Conditions(), [](const Condition& rCondition){return rCondition.Id();});
 
         // Loop the elements to create the negative nodes MLS basis
-        NodesCloudMapType ext_op_map;
         for (auto& rElement : mpModelPart->Elements()) {
             // Check if the element is split
-            const auto p_geom = rElement.pGetGeometry();
-            if (IsSplit(*p_geom)) {
+            const auto& r_geom = rElement.GetGeometry();
+            if (IsSplit(r_geom)) {
                 // Find the intersected element negative nodes
-                for (auto& r_node : *p_geom) {
-                    const std::size_t found = ext_op_map.count(&r_node);
+                for (auto& r_node : r_geom) {
+                    // Check whether node is negative (not ACTIVE) or already was added because of a previous element
+                    // TODO: not necessary if element and nodes are made ACTIVE after calculting the extension operator??
+                    const std::size_t found = rExtensionOperatorMap.count(&r_node);
                     if (r_node.IsNot(ACTIVE) && !found) {
+
                         // Get the current negative node neighbours cloud
                         Matrix cloud_nodes_coordinates;
                         PointerVector<NodeType> cloud_nodes;
@@ -305,15 +312,23 @@ private:
                         }
 
                         auto ext_op_key_data = std::make_pair(&r_node, cloud_data_vector);
-                        ext_op_map.insert(ext_op_key_data);
+                        rExtensionOperatorMap.insert(ext_op_key_data);
                     }
                 }
+
+                // Make the split element and its nodes ACTIVE to assemble it
+                // TODO: ?? if (mUseBoundarySplitting) {
+                rElement.Set(ACTIVE, true);
+                for (auto& rNode : r_geom) {
+                    rNode.Set(ACTIVE, true);
+                }
+                // }
             }
         }
 
         // Create the interface conditions
         //TODO: THIS CAN BE PARALLEL (WE JUST NEED TO MAKE CRITICAL THE CONDITION ID UPDATE)
-        for (auto& rElement : mpModelPart->Elements()) {
+        /*for (auto& rElement : mpModelPart->Elements()) {
             // Check if the element is split
             const auto p_geom = rElement.pGetGeometry();
             if (IsSplit(*p_geom)) {
@@ -327,14 +342,14 @@ private:
                 auto p_mod_sh_func = p_mod_sh_func_factory(p_geom, nodal_distances);
                 Vector pos_int_w;
                 Matrix pos_int_N;
-                std::vector<Vector> pos_int_n;
+                std::vector<array_1d<double,3>> pos_int_n;
                 typename ModifiedShapeFunctions::ShapeFunctionsGradientsType pos_int_DN_DX;
                 //TODO: Add a method without the interface gradients
                 p_mod_sh_func->ComputeInterfacePositiveSideShapeFunctionsAndGradientsValues(pos_int_N, pos_int_DN_DX, pos_int_w, GeometryData::GI_GAUSS_2);
                 p_mod_sh_func->ComputePositiveSideInterfaceAreaNormals(pos_int_n, GeometryData::GI_GAUSS_2);
 
                 // Calculate parent element size for the SBM BC imposition
-                const double h = p_element_size_func(*p_geom);
+                //const double h = p_element_size_func(*p_geom);
 
                 // Create an auxiliary set with all the cloud nodes that affect the current element
                 NodesCloudSetType cloud_nodes_set;
@@ -343,7 +358,7 @@ private:
                     if (r_node.Is(ACTIVE)) {
                         cloud_nodes_set.insert(p_node);
                     } else {
-                        auto& r_ext_op_data = ext_op_map[p_node];
+                        auto& r_ext_op_data = rExtensionOperatorMap[p_node];
                         for (auto it_data = r_ext_op_data.begin(); it_data != r_ext_op_data.end(); ++it_data) {
                             auto& p_node = std::get<0>(*it_data);
                             cloud_nodes_set.insert(p_node);
@@ -405,7 +420,7 @@ private:
 
                             // If it is not ACTIVE (negative side) search for the extension operator data
                             auto p_node = r_geom(i_node);
-                            auto& ext_op_data = ext_op_map[p_node];
+                            auto& ext_op_data = rExtensionOperatorMap[p_node];
 
                             // Loop the current negative node to get its extrapolation operator data and apply the weight to make the basis conformant
                             // Note that we need to check for the ids to match in the geometry as nodes in the map are mixed
@@ -434,7 +449,7 @@ private:
                     mpBoundarySubModelPart->AddCondition(p_cond);
 
                     // Store the SBM BC data in the condition database
-                    p_cond->SetValue(ELEMENT_H, h);
+                    //p_cond->SetValue(ELEMENT_H, h);
                     const double n_norm = norm_2(pos_int_n[i_g]);
                     p_cond->SetValue(NORMAL, pos_int_n[i_g] / n_norm);
                     p_cond->SetValue(INTEGRATION_WEIGHT, pos_int_w[i_g]);
@@ -444,24 +459,24 @@ private:
                     p_cond->SetValue(LOCAL_AXES_MATRIX, DN_DX_container);
                 }
             }
-        }
-        */
+        }*/
+        
 
-        // Make BOUNDARY elements and their nodes ACTIVE if they are split for volume integration
-        if (mUseBoundarySplitting) {
-            for (auto& rElement : mpModelPart->Elements()) {
-                // Check if the element is split
-                const auto& r_geom = rElement.GetGeometry();
-                if (IsSplit(r_geom)) {
-                    // Mark the boundary element as ACTIVE to assemble it
-                    rElement.Set(ACTIVE, true);
-                    // Mark the boundary element's nodes as ACTIVE
-                    for (auto& rNode : r_geom) {
-                        rNode.Set(ACTIVE, true);
-                    }
-                }
-            }
-        }
+        // // Make BOUNDARY elements and their nodes ACTIVE if they are split for volume integration
+        // if (mUseBoundarySplitting) {
+        //     for (auto& rElement : mpModelPart->Elements()) {
+        //         // Check if the element is split
+        //         const auto& r_geom = rElement.GetGeometry();
+        //         if (IsSplit(r_geom)) {
+        //             // Mark the boundary element as ACTIVE to assemble it
+        //             rElement.Set(ACTIVE, true);
+        //             // Mark the boundary element's nodes as ACTIVE
+        //             for (auto& rNode : r_geom) {
+        //                 rNode.Set(ACTIVE, true);
+        //             }
+        //         }
+        //     }
+        // }
     }
 
     void CalculateNonConformingExtensionBasis()
@@ -480,10 +495,10 @@ private:
 
         // Get the element size calculation function
         // Note that unique geometry in the mesh is assumed
-        auto p_element_size_func = GetElementSizeFunction(r_begin_geom);
+        // auto p_element_size_func = GetElementSizeFunction(r_begin_geom);
 
         // Get max condition id
-        std::size_t max_cond_id = block_for_each<MaxReduction<std::size_t>>(mpModelPart->Conditions(), [](const Condition& rCondition){return rCondition.Id();});
+        //std::size_t max_cond_id = block_for_each<MaxReduction<std::size_t>>(mpModelPart->Conditions(), [](const Condition& rCondition){return rCondition.Id();});
 
         // Loop the elements to find the intersected ones
         for (auto& rElement : mpModelPart->Elements()) {
@@ -491,7 +506,7 @@ private:
             const auto p_geom = rElement.pGetGeometry();
 
             // If the element is split, get the interface Gauss pt. data
-            // If the element is negative, it is deactivated to not be assembled
+            // If the element is negative, it stays deactivated to not be assembled
             if (IsSplit(*p_geom)) {
                 // Set the meshless cloud of point support for the MLS
                 Matrix cloud_nodes_coordinates;
@@ -508,14 +523,14 @@ private:
                 auto p_mod_sh_func = p_mod_sh_func_factory(p_geom, nodal_distances);
                 Vector pos_int_w;
                 Matrix pos_int_N;
-                std::vector<Vector> pos_int_n;
+                std::vector<array_1d<double,3>> pos_int_n;
                 typename ModifiedShapeFunctions::ShapeFunctionsGradientsType pos_int_DN_DX;
                 //TODO: Add a method without the interface gradients
                 p_mod_sh_func->ComputeInterfacePositiveSideShapeFunctionsAndGradientsValues(pos_int_N, pos_int_DN_DX, pos_int_w, GeometryData::GI_GAUSS_2);
                 p_mod_sh_func->ComputePositiveSideInterfaceAreaNormals(pos_int_n, GeometryData::GI_GAUSS_2);
 
                 // Calculate parent element size for the SBM BC imposition
-                const double h = p_element_size_func(*p_geom);
+                //const double h = p_element_size_func(r_geom);
 
                 // Iterate the interface Gauss pts.
                 DenseVector<double> i_g_N;
@@ -533,16 +548,18 @@ private:
                     auto p_prop = rElement.pGetProperties();
                     // auto p_cond = Kratos::make_intrusive<LaplacianShiftedBoundaryCondition>(++max_cond_id, cloud_nodes);
                     // p_cond->SetProperties(p_prop); //TODO: Think if we want properties in these conditions or not
-                    auto p_cond = mpConditionPrototype->Create(++max_cond_id, cloud_nodes, p_prop);
-                    p_cond->Set(ACTIVE, true);
-                    mpBoundarySubModelPart->AddCondition(p_cond);
+                    
+                    // auto p_cond = mpConditionPrototype->Create(++max_cond_id, cloud_nodes, p_prop);
+                    // p_cond->Set(ACTIVE, true);
+                    // mpBoundarySubModelPart->AddCondition(p_cond);
 
-                    // Store the SBM BC data in the condition database
-                    p_cond->SetValue(ELEMENT_H, h);
-                    const double n_norm = norm_2(pos_int_n[i_g]);
-                    p_cond->SetValue(NORMAL, pos_int_n[i_g] / n_norm);
-                    p_cond->SetValue(INTEGRATION_WEIGHT, pos_int_w[i_g]);
-                    p_cond->SetValue(INTEGRATION_COORDINATES, i_g_coords);
+                    // // Store the SBM BC data in the condition database
+                    // p_cond->SetValue(ELEMENT_H, h);
+                    // const double n_norm = norm_2(pos_int_n[i_g]);
+                    // p_cond->SetValue(NORMAL, pos_int_n[i_g] / n_norm);
+                    // p_cond->SetValue(INTEGRATION_WEIGHT, pos_int_w[i_g]);
+                    // p_cond->SetValue(INTEGRATION_COORDINATES, i_g_coords);
+                    
 
                     // Calculate the MLS shape functions and gradients and save in the database
                     Vector N_container;
@@ -550,13 +567,21 @@ private:
                     const double mls_kernel_rad = CalculateKernelRadius(cloud_nodes_coordinates, i_g_coords);
                     p_mls_sh_func(cloud_nodes_coordinates, i_g_coords, mls_kernel_rad, N_container, DN_DX_container);
                     //FIXME: Find variables for these
-                    p_cond->SetValue(BDF_COEFFICIENTS, N_container);
-                    p_cond->SetValue(LOCAL_AXES_MATRIX, DN_DX_container);
+                    //p_cond->SetValue(BDF_COEFFICIENTS, N_container);
+                    //p_cond->SetValue(LOCAL_AXES_MATRIX, DN_DX_container);
                 }
-            }
-        }
-        */
 
+                // TODO: Make the split element and its nodes ACTIVE to assemble it
+                if (mUseBoundarySplitting) {
+                rElement.Set(ACTIVE, true);
+                for (auto& rNode : r_geom) {
+                    rNode.Set(ACTIVE, true);
+                }
+                // }
+            }
+        }*/
+
+        // TODO: if always true put it in the element loop above
         // Make BOUNDARY elements and their nodes ACTIVE if they are split for volume integration
         if (mUseBoundarySplitting) {
             for (auto& rElement : mpModelPart->Elements()) {
@@ -574,8 +599,9 @@ private:
         }
     }
 
-    void ApplyExtensionConstraints()
+    void ApplyExtensionConstraints(NodesCloudMapType& rExtensionOperatorMap)
     {
+        
         KRATOS_WATCH("--- applying extension constraints ---");
 
         // Initialize counter of master slave constraints
@@ -583,55 +609,59 @@ private:
         // Get variable to constrain - TODO: user-defined? application-dependent?
         //const Variable<double>& r_var = r_settings.GetUnknownVariable();
         const auto& r_var = KratosComponents<Variable<double>>::Get("TEMPERATURE");
-        
-        ModelPart& r_mp = mpModelPart->GetSubModelPart("thermal_computing_domain");  // mrMainModelPart.GetSubModelPart("ComputingContact");
 
-        /*
-        ModelPart &master_model_part    = mpModelPart->GetSubModelPart(mParameters["master_sub_model_part_name"].GetString());
-        ModelPart &slave_model_part     = mpModelPart->GetSubModelPart(mParameters["slave_sub_model_part_name"].GetString());
-        NodesArrayType &r_nodes_master  = master_model_part.Nodes();
-        NodesArrayType &r_nodes_slave   = slave_model_part.Nodes();
-        */
-        
-        // Get negative nodes of split elements
-        /*for (const auto& rElement : mpModelPart->Elements()) {
-            const auto& r_geom = rElement.GetGeometry();
-            if (IsSplit(r_geom)) {
-                for (const auto& rNode : r_geom) {
-                    if (r_node.FastGetSolutionStepValue(DISTANCE) < 0.0) {
-                        
-                        ConstraintSlaveToMasterNodes(const NodeType& rCurrentSlaveNode)
+        // Loop through all negative nodes of split elements (slave nodes)
+        for (auto it_slave = rExtensionOperatorMap.begin(); it_slave != rExtensionOperatorMap.end(); ++it_slave) {
+            auto p_slave_node = std::get<0>(*it_slave);
+            auto& r_ext_op_data = rExtensionOperatorMap[p_slave_node];
 
+            std::size_t n_support_nodes = 0;
+            double N_total = 0.0;
 
-                    }
-                }
+            // Add one master slave constraint for every node of the support cloud (master) of the negative node (slave)
+            // The contributions of each master will be summed up in the BuilderAndSolver to give an equation for the slave dof
+            for (auto it_data = r_ext_op_data.begin(); it_data != r_ext_op_data.end(); ++it_data) {
+                auto& r_node_data = *it_data;
+                auto p_support_node = std::get<0>(r_node_data);
+                const double support_node_N = std::get<1>(r_node_data);
+
+                // Add master slave constraint, the support node N serves as weight of the constraint
+                mpModelPart->CreateNewMasterSlaveConstraint("LinearMasterSlaveConstraint", id++, 
+                *p_support_node, r_var, *p_slave_node, r_var, 
+                support_node_N, 0.0);
+
+                ++n_support_nodes;
+                N_total += support_node_N;
             }
-        }*/
 
-        // Get nodes of support cloud
-        const std::size_t n_support_nodes = 3;
-        int master_ids [n_support_nodes] = { 26,38,35 }; 
+            KRATOS_WATCH(n_support_nodes);
+            KRATOS_WATCH(N_total);
+        }
 
-        // TODO: Get weight from extension operator
-        double weight = 1.0 / n_support_nodes;
+        // // Get nodes of support cloud
+        // const std::size_t n_support_nodes = 3;
+        // int master_ids [n_support_nodes] = { 26,38,35 }; 
 
-        // TODO: Get slave node
-        auto& slave_node = r_mp.Nodes()[20];
+        // // TODO: Get weight from extension operator
+        // double weight = 1.0 / n_support_nodes;
 
-        //Add one master slave constraint for every node of the support cloud of the negative active node
-        for (std::size_t m = 0; m < n_support_nodes; ++m) {
+        // // TODO: Get slave node
+        // auto& slave_node = mpModelPart->Nodes()[20];
 
-            //TODO: Get master node
-            auto& master_node = r_mp.Nodes()[master_ids[m]];
+        // //Add one master slave constraint for every node of the support cloud of the negative active node
+        // for (std::size_t m = 0; m < n_support_nodes; ++m) {
 
-            // Add master slave constraint
-            r_mp.CreateNewMasterSlaveConstraint("LinearMasterSlaveConstraint", id++, 
-            // r_nodes_master[rNeighborNodes[master_iterator]->Id()], r_var, 
-            // r_nodes_slave[rCurrentSlaveNode.Id(), r_var, 
-            master_node, r_var, 
-            slave_node, r_var, 
-            weight, 0.0);
-        }  
+        //     //TODO: Get master node
+        //     auto& master_node = mpModelPart->Nodes()[master_ids[m]];
+
+        //     // Add master slave constraint
+        //     mpModelPart->CreateNewMasterSlaveConstraint("LinearMasterSlaveConstraint", id++, 
+        //     // r_nodes_master[rNeighborNodes[master_iterator]->Id()], r_var, 
+        //     // r_nodes_slave[rCurrentSlaveNode.Id(), r_var, 
+        //     master_node, r_var, 
+        //     slave_node, r_var, 
+        //     weight, 0.0);
+        // }  
 
         KRATOS_WATCH(id);      
     }
